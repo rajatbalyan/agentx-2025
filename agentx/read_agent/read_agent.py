@@ -11,6 +11,7 @@ from langchain.schema import HumanMessage, SystemMessage
 from agentx.common_libraries.base_agent import BaseAgent, AgentConfig
 from agentx.common_libraries.system_config import SystemConfig
 from agentx.common_libraries.code_indexer import CodeIndexer
+import os
 
 logger = structlog.get_logger()
 
@@ -48,34 +49,48 @@ class ReadAgent(BaseAgent):
     async def run_audit_tools(self, url: str) -> Dict[str, Any]:
         """Run website audit tools"""
         try:
-            # Run WebHint analysis using CLI
+            self.logger.info("Starting website audit", url=url)
+            
+            # Try to find hint in npm global directory
+            npm_path = os.path.expanduser("~\\AppData\\Roaming\\npm")
+            hint_path = os.path.join(npm_path, "hint.cmd")
+            
+            if not os.path.exists(hint_path):
+                self.logger.error("hint command not found", npm_path=npm_path)
+                raise FileNotFoundError("hint command not found. Please ensure it's installed globally with 'npm install -g hint'")
+            
+            self.logger.info("Found hint command", path=hint_path)
+            
+            # Run hint with full path
             result = subprocess.run(
-                ["hint", url, "--format", "json"],
+                [hint_path, url, "--format", "json"],
                 capture_output=True,
-                text=True
+                text=True,
+                shell=True  # Use shell=True for Windows
             )
             
             if result.returncode != 0:
-                self.logger.error("webhint_error", error=result.stderr)
-                return {}
+                self.logger.error(
+                    "hint command failed",
+                    returncode=result.returncode,
+                    stderr=result.stderr
+                )
+                raise subprocess.CalledProcessError(result.returncode, result.args, result.stdout, result.stderr)
             
-            # Parse WebHint results
-            webhint_results = json.loads(result.stdout)
+            self.logger.info("hint command completed successfully")
             
-            # Process results
-            audit_data = {
-                "accessibility": self._process_accessibility_hints(webhint_results),
-                "performance": self._process_performance_hints(webhint_results),
-                "best_practices": self._process_best_practices_hints(webhint_results),
-                "seo": self._process_seo_hints(webhint_results),
-                "security": self._process_security_hints(webhint_results)
-            }
-            
-            return audit_data
+            # Parse the results
+            try:
+                audit_results = json.loads(result.stdout)
+                self.logger.info("Successfully parsed hint results")
+                return audit_results
+            except json.JSONDecodeError as e:
+                self.logger.error("Failed to parse hint results", error=str(e))
+                raise
             
         except Exception as e:
-            self.logger.error("audit_error", url=url, error=str(e))
-            return {}
+            self.logger.error("Error running audit tools", error=str(e))
+            raise
     
     def _process_accessibility_hints(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Process accessibility hints"""
@@ -196,41 +211,42 @@ Issues Found:
         
         return prompt
     
-    async def process(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Process a website URL and generate analysis"""
-        url = data.get("url")
-        if not url:
-            raise ValueError("URL is required")
+    async def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Process input data through the agent.
         
+        Args:
+            input_data: Input data to process
+            
+        Returns:
+            Processing results
+        """
         try:
+            # Extract URL from input data
+            url = input_data.get('url')
+            if not url:
+                raise ValueError("URL not provided in input data")
+            
             # Run audit tools
             audit_results = await self.run_audit_tools(url)
             
-            # Normalize data
-            normalized_data = self.normalize_data(audit_results)
-            
-            # Generate prompt
-            prompt = self.generate_prompt(normalized_data)
-            
-            # Store results in memory
-            await self.memory_manager.add_document({
-                "url": url,
-                "normalized_data": normalized_data,
-                "prompt": prompt,
-                "timestamp": datetime.now().isoformat()
+            # Store the interaction
+            await self.store_interaction({
+                'type': 'website_audit',
+                'url': url,
+                'results': audit_results,
+                'timestamp': datetime.now().isoformat()
             })
             
             return {
-                "status": "success",
-                "normalized_data": normalized_data,
-                "prompt": prompt
+                'status': 'success',
+                'results': audit_results
             }
             
         except Exception as e:
-            self.logger.error("processing_error", url=url, error=str(e))
+            self.logger.error("processing_error", error=str(e), url=url)
             return {
-                "status": "error",
-                "error": str(e)
+                'status': 'error',
+                'error': str(e)
             }
     
     async def cleanup(self) -> None:

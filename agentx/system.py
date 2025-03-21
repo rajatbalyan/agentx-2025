@@ -44,41 +44,54 @@ class AgentXSystem:
             if not self.config.api_keys.get('google_api_key'):
                 raise ValueError("Google API key not found in configuration")
             
+            self.logger.info("Starting system initialization")
+            
             # Initialize ReadAgent
+            self.logger.info("Initializing ReadAgent")
             read_agent_config = AgentConfig(
                 name="read_agent",
                 description="Agent responsible for reading and analyzing code",
-                enabled=True,
-                max_retries=3,
-                timeout=300,
-                temperature=0.7,
-                max_tokens=1000
+                model_name=self.config.model.name,
+                temperature=self.config.model.temperature,
+                max_tokens=self.config.model.max_tokens,
+                top_p=self.config.model.top_p
             )
-            self.agents["read_agent"] = ReadAgent(
+            
+            read_agent = ReadAgent(
                 config=read_agent_config,
                 system_config=self.config
             )
+            await read_agent.initialize()
+            
+            # Register the read agent with the correct task type
+            self.agents["read"] = read_agent
+            self.logger.info("ReadAgent initialized and registered", agent_type="read")
             
             # Initialize ManagerAgent
+            self.logger.info("Initializing ManagerAgent")
             manager_agent_config = AgentConfig(
                 name="manager_agent",
-                description="Agent responsible for coordinating other agents",
-                enabled=True,
-                max_retries=3,
-                timeout=300,
-                temperature=0.7,
-                max_tokens=1000
+                description="Agent responsible for managing and coordinating other agents",
+                model_name=self.config.model.name,
+                temperature=self.config.model.temperature,
+                max_tokens=self.config.model.max_tokens,
+                top_p=self.config.model.top_p
             )
-            self.agents["manager_agent"] = ManagerAgent(
+            
+            manager_agent = ManagerAgent(
                 config=manager_agent_config,
                 system_config=self.config
             )
+            await manager_agent.initialize()
             
-            # Initialize all agents
-            for agent in self.agents.values():
-                await agent.initialize()
-                
-            self.logger.info("System initialized successfully")
+            # Register the manager agent
+            self.agents["manager"] = manager_agent
+            self.logger.info("ManagerAgent initialized and registered", agent_type="manager")
+            
+            self.logger.info(
+                "System initialized successfully",
+                registered_agents=list(self.agents.keys())
+            )
             
         except Exception as e:
             self.logger.error("Error initializing system", error=str(e))
@@ -95,10 +108,10 @@ class AgentXSystem:
         """
         try:
             # Process through read agent
-            read_result = await self.agents["read_agent"].process(input_data)
+            read_result = await self.agents["read"].process(input_data)
             
             # Process through manager agent
-            manager_result = await self.agents["manager_agent"].process(read_result)
+            manager_result = await self.agents["manager"].process(read_result)
             
             return {
                 "status": "success",
@@ -133,27 +146,40 @@ class AgentXSystem:
             Processing results
         """
         try:
+            # Log available agents
+            self.logger.info(
+                "Available agents",
+                agents=list(self.agents.keys()),
+                requested_task=task_type
+            )
+            
             # Get the appropriate agent
             agent = self.agents.get(task_type)
             if not agent:
-                raise ValueError(f"No agent found for task type: {task_type}")
+                raise ValueError(
+                    f"No agent found for task type: {task_type}. "
+                    f"Available agents: {list(self.agents.keys())}"
+                )
             
             # Process the task
             result = await agent.process(data)
             
-            # Store the result in memory
-            await self.memory_manager.add_interaction({
-                "type": "task_result",
-                "task_type": task_type,
-                "data": data,
-                "result": result,
-                "timestamp": datetime.now().isoformat()
-            })
+            # Log the task result
+            self.logger.info(
+                "Task processed successfully",
+                task_type=task_type,
+                result=result
+            )
             
             return result
             
         except Exception as e:
-            self.logger.error("Error processing task", error=str(e))
+            self.logger.error(
+                "Error processing task",
+                error=str(e),
+                task_type=task_type,
+                available_agents=list(self.agents.keys())
+            )
             raise
 
 async def main():

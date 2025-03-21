@@ -14,6 +14,25 @@ app = FastAPI(title="AgentX API")
 config_path = Path("config/agentx.config.yaml")
 system = AgentXSystem(str(config_path))
 
+@app.on_event("startup")
+async def startup_event():
+    """Initialize system on startup."""
+    try:
+        await system.initialize()
+        logger.info("System initialized successfully")
+    except Exception as e:
+        logger.error("Error initializing system", error=str(e))
+        raise
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Clean up system on shutdown."""
+    try:
+        await system.cleanup()
+        logger.info("System cleaned up")
+    except Exception as e:
+        logger.error("Error during cleanup", error=str(e))
+
 class TaskRequest(BaseModel):
     """Request model for tasks."""
     task_type: str

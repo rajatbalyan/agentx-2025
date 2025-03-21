@@ -23,9 +23,12 @@ class MemoryConfig(BaseModel):
 
 class ModelConfig(BaseModel):
     """Model configuration."""
+    provider: str = "google"     # Model provider
+    name: str = "gemini-pro"     # Model name
     model_path: str = "models"
     temperature: float = 0.7
     max_tokens: int = 1000
+    top_p: float = 0.95         # Nucleus sampling parameter
 
 class AgentConfig(BaseModel):
     """Agent configuration."""

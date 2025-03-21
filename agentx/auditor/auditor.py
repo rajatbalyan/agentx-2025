@@ -50,6 +50,3 @@ def filter_audit(audit_file: str, output_file: str):
         with open(output_file, 'w') as filtered_file:
             json.dump(filtered_data, filtered_file, indent=2)
     return True
-
-
-audit("https://palinifoundation.vercel.app")

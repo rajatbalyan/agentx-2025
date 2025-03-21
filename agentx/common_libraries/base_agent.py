@@ -135,19 +135,18 @@ class BaseAgent:
         """
         return True
 
-    async def store_interaction(self, task: Dict[str, Any], result: Dict[str, Any]) -> None:
+    async def store_interaction(self, interaction: Dict[str, Any]) -> None:
         """Store an interaction in memory.
         
         Args:
-            task: Input task
-            result: Processing result
+            interaction: Interaction data to store
         """
-        if hasattr(self, 'memory'):
-            await self.memory.add_interaction({
-                'input': task,
-                'output': result,
-                'timestamp': asyncio.get_event_loop().time()
-            })
+        try:
+            await self.memory_manager.add_interaction(interaction)
+            self.logger.info("Interaction stored in memory")
+        except Exception as e:
+            self.logger.error("Error storing interaction", error=str(e))
+            raise
 
     async def get_similar_interactions(self, task: Dict[str, Any], limit: int = 5) -> List[Dict[str, Any]]:
         """Get similar past interactions.
