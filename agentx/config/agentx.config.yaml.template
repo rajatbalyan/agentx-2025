@@ -1,0 +1,124 @@
+# AgentX Configuration Template
+# -------------------------
+# This file contains all configurable options for the AgentX framework.
+# Copy this file to agentx.config.yaml and modify according to your needs.
+
+# Website Configuration
+# -------------------
+website_url: https://your-website.com  # URL of the website to monitor
+scan_interval: 3600                    # Interval between scans in seconds
+
+# Agent Configuration
+# -----------------
+agents:
+  # Enable/disable specific agents
+  content_update: true         # Updates outdated content
+  seo_optimization: true       # Optimizes meta tags and structure
+  error_fixing: true          # Fixes detected errors
+  content_generation: true     # Generates new content
+  performance_monitoring: true # Monitors site performance
+
+  # Agent-specific settings
+  settings:
+    content_update:
+      max_age_days: 30        # Maximum content age before update
+      priority_paths:         # Paths to prioritize for updates
+        - /blog
+        - /news
+        - /docs
+
+    seo_optimization:
+      min_score: 80          # Minimum SEO score to maintain
+      focus_keywords: []      # List of focus keywords
+      ignore_paths:          # Paths to ignore
+        - /admin
+        - /api
+
+    error_fixing:
+      severity_threshold: "warning"  # Minimum severity to fix
+      auto_fix: true                # Automatically fix issues
+      notify_on_fix: true           # Send notification on fix
+
+    content_generation:
+      max_length: 1000       # Maximum content length
+      tone: "professional"   # Content tone
+      languages:            # Supported languages
+        - en
+        - es
+
+    performance_monitoring:
+      metrics:              # Metrics to monitor
+        - load_time
+        - ttfb
+        - fcp
+      thresholds:          # Performance thresholds
+        load_time: 3000    # ms
+        ttfb: 600         # ms
+        fcp: 1000         # ms
+
+# Schedule Configuration
+# -------------------
+schedule:
+  frequency: daily           # Maintenance frequency (hourly, daily, weekly)
+  time: "00:00"             # Time to run (UTC)
+  max_concurrent: 3          # Maximum concurrent tasks
+  retry:
+    attempts: 3             # Number of retry attempts
+    delay: 300             # Delay between retries (seconds)
+
+# Logging Configuration
+# ------------------
+logging:
+  level: INFO              # Log level (DEBUG, INFO, WARNING, ERROR)
+  file: logs/agentx.log    # Log file path
+  max_size: 100MB          # Maximum log file size
+  backup_count: 5          # Number of backup files
+  format: json             # Log format (json, text)
+
+# Memory Configuration
+# -----------------
+memory:
+  path: data/memory       # Base path for memory storage
+  vector_store:          # Vector store settings
+    path: data/memory/vectors
+    dimension: 1536
+    metric: cosine
+  conversation_store:    # Conversation memory settings
+    path: data/memory/conversations
+    max_age: 30         # Days to keep conversations
+
+# Model Configuration
+# ----------------
+models:
+  paths:
+    seo_agent: models/seo_agent/
+    content_gen: models/content_gen/
+    error_fix: models/error_fix/
+  settings:
+    temperature: 0.7     # Model temperature
+    max_tokens: 1000     # Maximum tokens per request
+    top_p: 0.95         # Nucleus sampling parameter
+
+# GitHub Integration
+# ---------------
+github:
+  token: your-github-token  # GitHub API token
+  repo: owner/repo          # Repository (owner/repo)
+  branch: main             # Default branch
+  auto_merge: false        # Auto-merge pull requests
+  labels:                  # Labels for pull requests
+    - agentx
+    - automated
+
+# API Keys
+# -------
+api_keys:
+  google: your-google-api-key  # Google API key for Gemini
+
+# Development Mode
+# -------------
+development:
+  enabled: false          # Enable development mode
+  hot_reload: true       # Enable hot reload
+  debug: false           # Enable debug mode
+  mock_apis: false       # Mock external APIs 

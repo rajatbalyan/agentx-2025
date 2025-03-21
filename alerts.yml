@@ -1,0 +1,29 @@
+groups:
+  - name: agentx_alerts
+    rules:
+      - alert: AgentDown
+        expr: up{job="agentx"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Agent {{ $labels.agent }} is down"
+          description: "Agent {{ $labels.agent }} has been down for more than 1 minute"
+
+      - alert: HighErrorRate
+        expr: rate(agentx_errors_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate for {{ $labels.agent }}"
+          description: "Error rate is above 10% for the last 5 minutes"
+
+      - alert: HighLatency
+        expr: agentx_request_duration_seconds > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High latency for {{ $labels.agent }}"
+          description: "Request duration is above 2 seconds" 

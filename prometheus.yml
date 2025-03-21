@@ -1,0 +1,56 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+# Rule files to load
+rule_files:
+  - "alerts.yml"
+
+# Scrape configurations
+scrape_configs:
+  - job_name: 'agentx'
+    static_configs:
+      - targets: ['manager-agent:8000']
+        labels:
+          agent: 'manager'
+      - targets: ['read-agent:8001']
+        labels:
+          agent: 'read'
+      - targets: ['content-update-agent:8002']
+        labels:
+          agent: 'content_update'
+      - targets: ['seo-optimization-agent:8003']
+        labels:
+          agent: 'seo'
+      - targets: ['error-fixing-agent:8004']
+        labels:
+          agent: 'error_fixing'
+      - targets: ['content-generation-agent:8005']
+        labels:
+          agent: 'content_generation'
+      - targets: ['performance-monitoring-agent:8006']
+        labels:
+          agent: 'performance'
+      - targets: ['cicd-deployment-agent:8007']
+        labels:
+          agent: 'cicd'
+    relabel_configs:
+      - source_labels: [__name__]
+        regex: 'agentx_(.*)'
+        target_label: 'metric_name'
+        replacement: '$1'
+
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090'] 
