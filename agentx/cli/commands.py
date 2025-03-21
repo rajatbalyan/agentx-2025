@@ -3,184 +3,159 @@
 import os
 import click
 import yaml
+import shutil
+import structlog
+import asyncio
+from pathlib import Path
 from typing import Optional
 import uvicorn
+from dotenv import load_dotenv
 from agentx.system import AgentXSystem
+
+logger = structlog.get_logger()
+
+# Load environment variables from .env file
+load_dotenv()
 
 @click.group()
 def cli():
-    """AgentX CLI - Autonomous Website Maintenance Framework"""
+    """AgentX CLI - Command line interface for AgentX framework."""
     pass
 
 @cli.command()
-@click.option('--config', '-c', default='agentx.config.yaml',
-              help='Path to configuration file')
-@click.option('--force', '-f', is_flag=True,
-              help='Force overwrite existing configuration')
-def init(config: str, force: bool):
+def init():
     """Initialize AgentX configuration."""
-    if os.path.exists(config) and not force:
-        click.echo(f"Configuration file {config} already exists. Use --force to overwrite.")
-        return
-
-    # Create default configuration
-    default_config = {
-        'website_url': 'https://your-website.com',
-        'agents': {
-            'content_update': True,
-            'seo_optimization': True,
-            'error_fixing': True,
-            'content_generation': True,
-            'performance_monitoring': True
-        },
-        'schedule': {
-            'frequency': 'daily',
-            'time': '00:00'
-        },
-        'logging': {
-            'level': 'INFO',
-            'file': 'logs/agentx.log',
-            'max_size': '100MB',
-            'backup_count': 5
-        },
-        'models': {
-            'seo_agent': 'models/seo_agent/',
-            'content_generation': 'models/content_gen/',
-            'error_fixing': 'models/error_fix/'
-        },
-        'github': {
-            'token': 'your-github-token',
-            'repo': 'owner/repo',
-            'branch': 'main'
-        },
-        'api_keys': {
-            'google': 'your-google-api-key'
-        }
-    }
-
-    # Create necessary directories
-    os.makedirs('logs', exist_ok=True)
-    os.makedirs('models/seo_agent', exist_ok=True)
-    os.makedirs('models/content_gen', exist_ok=True)
-    os.makedirs('models/error_fix', exist_ok=True)
-    os.makedirs('data/memory/vectors', exist_ok=True)
-    os.makedirs('data/memory/conversations', exist_ok=True)
-
-    # Write configuration file
-    with open(config, 'w') as f:
-        yaml.dump(default_config, f, default_flow_style=False)
-
-    click.echo(f"Created configuration file: {config}")
-    click.echo("Please edit the configuration file with your settings.")
-
-@cli.command()
-@click.option('--config', '-c', default='agentx.config.yaml',
-              help='Path to configuration file')
-@click.option('--dry-run', is_flag=True,
-              help='Preview changes without applying them')
-def run(config: str, dry_run: bool):
-    """Run the AgentX pipeline."""
-    if not os.path.exists(config):
-        click.echo(f"Configuration file {config} not found. Run 'agentx init' first.")
-        return
-
-    # Load configuration
-    with open(config) as f:
-        config_data = yaml.safe_load(f)
-
-    # Initialize system
-    system = AgentXSystem()
-    
-    if dry_run:
-        click.echo("Dry run - previewing changes:")
-        click.echo(yaml.dump(config_data, default_flow_style=False))
-        return
-
     try:
-        # Initialize and start the system
-        system.initialize_agents()
-        click.echo("AgentX system started successfully.")
+        # Create config directory if it doesn't exist
+        config_dir = Path("config")
+        config_dir.mkdir(exist_ok=True)
         
-        # Start the main application
-        uvicorn.run(system.app, host="0.0.0.0", port=8000)
+        # Copy template to config directory
+        template_path = Path(__file__).parent.parent / "config" / "agentx.config.yaml.template"
+        config_path = config_dir / "agentx.config.yaml"
+        
+        if config_path.exists():
+            if not click.confirm("Configuration file already exists. Overwrite?"):
+                return
+        
+        shutil.copy2(template_path, config_path)
+        click.echo(f"Created configuration file at {config_path}")
+        
+        # Create necessary directories
+        dirs = ["logs", "data/memory", "temp", "models"]
+        for dir_path in dirs:
+            Path(dir_path).mkdir(parents=True, exist_ok=True)
+            click.echo(f"Created directory: {dir_path}")
+            
+        click.echo("\nNext steps:")
+        click.echo("1. Edit config/agentx.config.yaml with your settings")
+        click.echo("2. Set up your environment variables (GOOGLE_API_KEY, GITHUB_TOKEN, etc.)")
+        click.echo("3. Run 'python -m agentx.cli dev' to start development server")
         
     except Exception as e:
-        click.echo(f"Error starting AgentX: {str(e)}")
+        logger.error("init_error", error=str(e))
+        click.echo(f"Error initializing configuration: {str(e)}", err=True)
 
 @cli.command()
-@click.option('--config', '-c', default='agentx.config.yaml',
-              help='Path to configuration file')
-@click.option('--port', '-p', default=8000,
-              help='Port for development server')
-def dev(config: str, port: int):
-    """Run AgentX in development mode."""
-    if not os.path.exists(config):
-        click.echo(f"Configuration file {config} not found. Run 'agentx init' first.")
-        return
-
-    # Set development environment
-    os.environ['AGENTX_DEV'] = 'true'
-    
+@click.option("--dry-run", is_flag=True, help="Preview changes without applying them")
+def run(dry_run: bool):
+    """Run the AgentX pipeline."""
     try:
-        # Initialize system with development settings
-        system = AgentXSystem()
-        system.initialize_agents()
+        # Load configuration
+        config_path = Path("config/agentx.config.yaml")
+        if not config_path.exists():
+            click.echo("Configuration file not found. Run 'python -m agentx.cli init' first.", err=True)
+            return
         
-        click.echo("Starting AgentX in development mode...")
-        click.echo(f"Development server running at http://localhost:{port}")
+        # Initialize system
+        system = AgentXSystem(str(config_path))
         
-        # Start development server with auto-reload
+        # Run pipeline
+        if dry_run:
+            click.echo("Dry run mode - previewing changes...")
+            # TODO: Implement dry run functionality
+        else:
+            click.echo("Starting AgentX pipeline...")
+            # TODO: Implement actual pipeline execution
+            
+    except Exception as e:
+        logger.error("run_error", error=str(e))
+        click.echo(f"Error running pipeline: {str(e)}", err=True)
+
+@cli.command()
+def dev():
+    """Run AgentX in development mode."""
+    try:
+        # Ensure environment variables are loaded
+        load_dotenv()
+        
+        # Debug: Check if environment variable is loaded
+        click.echo(f"GOOGLE_API_KEY loaded: {'Yes' if os.getenv('GOOGLE_API_KEY') else 'No'}")
+        
+        # Load configuration
+        config_path = Path("config/agentx.config.yaml")
+        if not config_path.exists():
+            click.echo("Configuration file not found. Run 'python -m agentx.cli init' first.", err=True)
+            return
+        
+        # Initialize system
+        system = AgentXSystem(str(config_path))
+        asyncio.run(system.initialize())
+        
+        click.echo("Starting development server...")
+        # Start the development server with auto-reload
         uvicorn.run(
-            "agentx.system:app",
+            "agentx.api:app",
             host="0.0.0.0",
-            port=port,
+            port=8000,
             reload=True,
-            reload_dirs=["agentx"]
+            reload_dirs=["agentx"],
+            log_level="info"
         )
         
     except Exception as e:
-        click.echo(f"Error starting development server: {str(e)}")
+        logger.error("dev_error", error=str(e))
+        click.echo(f"Error starting development server: {str(e)}", err=True)
 
 @cli.command()
-@click.option('--config', '-c', default='agentx.config.yaml',
-              help='Path to configuration file')
-@click.option('--output', '-o', default='dist',
-              help='Output directory for build artifacts')
-def build(config: str, output: str):
+@click.option("--output", "-o", default="dist", help="Output directory for built files")
+def build(output: str):
     """Build AgentX for production."""
-    if not os.path.exists(config):
-        click.echo(f"Configuration file {config} not found. Run 'agentx init' first.")
-        return
-
     try:
-        # Create output directory
-        os.makedirs(output, exist_ok=True)
-        
-        # Load configuration
-        with open(config) as f:
-            config_data = yaml.safe_load(f)
-        
         # Validate configuration
-        required_keys = ['website_url', 'agents', 'api_keys']
-        missing_keys = [key for key in required_keys if key not in config_data]
-        if missing_keys:
-            click.echo(f"Missing required configuration keys: {', '.join(missing_keys)}")
+        config_path = Path("config/agentx.config.yaml")
+        if not config_path.exists():
+            click.echo("Configuration file not found. Run 'python -m agentx.cli init' first.", err=True)
             return
         
-        # Copy necessary files to output directory
-        import shutil
-        shutil.copy2(config, os.path.join(output, 'agentx.config.yaml'))
+        # Create output directory
+        output_dir = Path(output)
+        output_dir.mkdir(parents=True, exist_ok=True)
         
-        # Create directory structure
-        os.makedirs(os.path.join(output, 'logs'), exist_ok=True)
-        os.makedirs(os.path.join(output, 'data'), exist_ok=True)
-        os.makedirs(os.path.join(output, 'models'), exist_ok=True)
+        # Copy necessary files
+        files_to_copy = [
+            "config/agentx.config.yaml",
+            "agentx",
+            "requirements.txt",
+            "README.md"
+        ]
         
-        click.echo(f"Build completed. Output directory: {output}")
-        click.echo("You can now deploy the contents of the output directory.")
+        for file_path in files_to_copy:
+            src = Path(file_path)
+            if src.exists():
+                if src.is_dir():
+                    shutil.copytree(src, output_dir / src.name, dirs_exist_ok=True)
+                else:
+                    shutil.copy2(src, output_dir / src.name)
+                click.echo(f"Copied: {file_path}")
+            else:
+                click.echo(f"Warning: {file_path} not found", err=True)
+        
+        click.echo(f"\nBuild complete! Output directory: {output_dir}")
         
     except Exception as e:
-        click.echo(f"Error building AgentX: {str(e)}")
+        logger.error("build_error", error=str(e))
+        click.echo(f"Error building project: {str(e)}", err=True)
 
 if __name__ == '__main__':
     cli() 

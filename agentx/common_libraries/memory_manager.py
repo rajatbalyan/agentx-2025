@@ -1,166 +1,151 @@
-from typing import Dict, Any, List, Optional
-from langmem import Memory, VectorMemory, ConversationMemory
-from langmem.store import ChromaStore
-from langmem.embeddings import GeminiEmbeddings
-import google.generativeai as genai
-from datetime import datetime
+"""Memory management system for AgentX."""
+
 import os
-import json
+from typing import Any, Dict, List, Optional
+import structlog
+from datetime import datetime
+
+from agentx.common_libraries.db_manager import db_manager
+
+logger = structlog.get_logger()
 
 class MemoryManager:
-    """Manages different types of memory for agents using LangMem"""
+    """Manages memory operations for agents."""
     
-    def __init__(self, agent_name: str):
-        self.agent_name = agent_name
+    def __init__(self, persist_directory: str = "data/memory/vectors"):
+        """Initialize the memory manager.
         
-        # Initialize Gemini
-        genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-        self.embeddings = GeminiEmbeddings()
+        Args:
+            persist_directory: Directory to persist the database
+        """
+        self.persist_directory = persist_directory
         
-        # Create memory storage directory
-        self.storage_path = f"data/memory/{agent_name}"
-        os.makedirs(self.storage_path, exist_ok=True)
-        
-        # Initialize vector memory with ChromaDB
-        self.vector_store = ChromaStore(
-            collection_name=f"{agent_name}_vectors",
-            persist_directory=self.storage_path
+        # Initialize ChromaDB client using the global database manager
+        self.client = db_manager.initialize(
+            os.path.join(persist_directory, "chroma")
         )
         
-        # Initialize different types of memory
-        self.conversation_memory = ConversationMemory(
-            buffer_size=1000,  # Store last 1000 interactions
-            storage_path=os.path.join(self.storage_path, "conversations")
+        # Create or get collection
+        self.collection = self.client.get_or_create_collection(
+            name="agent_memory",
+            metadata={"hnsw:space": "cosine"}
         )
         
-        self.vector_memory = VectorMemory(
-            store=self.vector_store,
-            embeddings=self.embeddings
-        )
+        self.logger = logger.bind(component="memory_manager")
         
-        # Combined memory manager
-        self.memory = Memory(
-            conversation=self.conversation_memory,
-            vector=self.vector_memory
-        )
-    
-    async def add_interaction(
-        self,
-        input_data: Dict[str, Any],
-        output_data: Dict[str, Any]
-    ) -> None:
-        """Store an interaction in both conversation and vector memory"""
-        timestamp = datetime.now().isoformat()
+    async def add_interaction(self, interaction: Dict[str, Any]) -> None:
+        """Add an interaction to memory.
         
-        # Create memory entry
-        memory_entry = {
-            "timestamp": timestamp,
-            "input": input_data,
-            "output": output_data,
-            "type": "interaction"
-        }
-        
-        # Add to conversation memory
-        await self.conversation_memory.add(memory_entry)
-        
-        # Add to vector memory with metadata
-        await self.vector_memory.add(
-            text=json.dumps(memory_entry),
-            metadata={
-                "timestamp": timestamp,
-                "type": "interaction",
-                "agent": self.agent_name
-            }
-        )
-    
-    async def add_document(
-        self,
-        document: Dict[str, Any],
-        metadata: Optional[Dict[str, Any]] = None
-    ) -> None:
-        """Store a document in vector memory"""
-        metadata = metadata or {}
-        metadata.update({
-            "timestamp": datetime.now().isoformat(),
-            "agent": self.agent_name
-        })
-        
-        await self.vector_memory.add(
-            text=json.dumps(document),
-            metadata=metadata
-        )
-    
-    async def search_similar_interactions(
-        self,
-        query: str,
-        k: int = 5,
-        filter_criteria: Optional[Dict[str, Any]] = None
-    ) -> List[Dict[str, Any]]:
-        """Search for similar past interactions"""
-        results = await self.vector_memory.search(
-            query=query,
-            k=k,
-            filter_criteria=filter_criteria
-        )
-        
-        return [
-            {
-                "content": json.loads(result.text),
-                "score": result.score,
-                "metadata": result.metadata
-            }
-            for result in results
-        ]
-    
-    async def get_recent_interactions(
-        self,
-        k: int = 5,
-        filter_type: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
-        """Get the most recent interactions"""
-        interactions = await self.conversation_memory.get_recent(k)
-        
-        if filter_type:
-            interactions = [
-                i for i in interactions
-                if i.get("type") == filter_type
-            ]
-        
-        return interactions
-    
-    async def get_conversation_context(
-        self,
-        window_size: int = 5
-    ) -> str:
-        """Get recent conversation context for LLM prompts"""
-        recent = await self.get_recent_interactions(window_size)
-        context = []
-        
-        for interaction in recent:
-            context.append(f"User: {json.dumps(interaction['input'])}")
-            context.append(f"Assistant: {json.dumps(interaction['output'])}")
-        
-        return "\n".join(context)
-    
-    async def save(self) -> None:
-        """Save all memory to disk"""
-        await self.conversation_memory.save()
-        await self.vector_memory.save()
-    
-    async def load(self) -> None:
-        """Load all memory from disk"""
+        Args:
+            interaction: Interaction data to store
+        """
         try:
-            await self.conversation_memory.load()
-            await self.vector_memory.load()
+            # Add to vector memory for semantic search
+            self.collection.add(
+                documents=[str(interaction)],
+                metadatas=[{
+                    "type": "interaction",
+                    "timestamp": str(datetime.now())
+                }],
+                ids=[f"interaction_{len(self.collection.get()['ids'])}"]
+            )
+            
+            self.logger.info("Added interaction to memory")
+            
         except Exception as e:
-            print(f"Error loading memory: {str(e)}")
+            self.logger.error("Error adding interaction to memory", error=str(e))
     
-    async def clear(self) -> None:
-        """Clear all memory"""
-        await self.conversation_memory.clear()
-        await self.vector_memory.clear()
+    async def search_similar(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
+        """Search for similar interactions.
         
-        # Remove persistent storage
-        import shutil
-        shutil.rmtree(self.storage_path, ignore_errors=True)
-        os.makedirs(self.storage_path, exist_ok=True) 
+        Args:
+            query: Search query
+            limit: Maximum number of results to return
+            
+        Returns:
+            List of similar interactions
+        """
+        try:
+            results = self.collection.query(
+                query_texts=[query],
+                n_results=limit
+            )
+            
+            return [
+                {
+                    "content": doc,
+                    "metadata": meta,
+                    "id": id
+                }
+                for doc, meta, id in zip(
+                    results["documents"][0],
+                    results["metadatas"][0],
+                    results["ids"][0]
+                )
+            ]
+            
+        except Exception as e:
+            self.logger.error("Error searching memory", error=str(e))
+            return []
+    
+    async def get_recent_interactions(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """Get recent interactions.
+        
+        Args:
+            limit: Maximum number of interactions to return
+            
+        Returns:
+            List of recent interactions
+        """
+        try:
+            results = self.collection.get(
+                limit=limit,
+                order_by=["timestamp"],
+                order=["desc"]
+            )
+            
+            return [
+                {
+                    "content": doc,
+                    "metadata": meta,
+                    "id": id
+                }
+                for doc, meta, id in zip(
+                    results["documents"],
+                    results["metadatas"],
+                    results["ids"]
+                )
+            ]
+            
+        except Exception as e:
+            self.logger.error("Error getting recent interactions", error=str(e))
+            return []
+    
+    async def get_conversation_context(self, limit: int = 5) -> str:
+        """Get conversation context.
+        
+        Args:
+            limit: Maximum number of interactions to include
+            
+        Returns:
+            Formatted conversation context
+        """
+        try:
+            interactions = await self.get_recent_interactions(limit)
+            
+            context = []
+            for interaction in interactions:
+                context.append(f"{interaction['metadata']['timestamp']}: {interaction['content']}")
+            
+            return "\n".join(context)
+            
+        except Exception as e:
+            self.logger.error("Error getting conversation context", error=str(e))
+            return ""
+    
+    async def cleanup(self) -> None:
+        """Clean up memory resources."""
+        try:
+            self.client.persist()
+        except Exception as e:
+            self.logger.error("Error during memory cleanup", error=str(e)) 

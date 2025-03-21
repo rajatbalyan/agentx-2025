@@ -3,6 +3,18 @@
 # This file contains all configurable options for the AgentX framework.
 # Copy this file to agentx.config.yaml and modify according to your needs.
 
+# Workspace Configuration
+# --------------------
+workspace:
+  path: .  # Path to the workspace (default: current directory)
+  ignore_patterns:  # Patterns to ignore during indexing
+    - "**/__pycache__/**"
+    - "**/*.pyc"
+    - "**/node_modules/**"
+    - "**/.git/**"
+    - "**/venv/**"
+    - "**/env/**"
+
 # Website Configuration
 # -------------------
 website_url: https://your-website.com  # URL of the website to monitor

@@ -1,0 +1,42 @@
+# Development Configuration for AgentX
+
+# Website Configuration
+website_url: "http://localhost:8000"  # Change this to your target website
+scan_interval: 300  # 5 minutes
+
+# Agent Configuration
+agent_config:
+  enabled_agents:
+    - content_update
+    - seo_optimization
+    - error_fixing
+    - content_generation
+    - performance_monitoring
+
+# Development Mode
+development_mode:
+  enabled: true
+  debug: true
+  auto_reload: true
+  port: 8000
+
+# Logging Configuration
+logging:
+  level: "DEBUG"
+  file: "logs/agentx.log"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# Memory Configuration
+memory:
+  vector_store_path: "data/memory/vector_store"
+  conversation_memory_path: "data/memory/conversations"
+
+# Model Configuration
+model:
+  model_path: "models"
+  temperature: 0.7
+  max_tokens: 1000
+
+# API Keys (Add your keys here)
+api_keys:
+  google_api_key: "${GOOGLE_API_KEY}"  # Google API key 

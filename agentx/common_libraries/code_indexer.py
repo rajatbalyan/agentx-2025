@@ -6,10 +6,11 @@ import ast
 from pathlib import Path
 import structlog
 from dataclasses import dataclass
-from chromadb import Client, Collection
-from chromadb.config import Settings
+from chromadb import Collection
 import networkx as nx
 import re
+
+from agentx.common_libraries.db_manager import db_manager
 
 logger = structlog.get_logger()
 
@@ -86,11 +87,10 @@ class CodeIndexer:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         
-        # Initialize ChromaDB for semantic search
-        self.chroma_client = Client(Settings(
-            persist_directory=str(self.db_path),
-            anonymized_telemetry=False
-        ))
+        # Initialize ChromaDB for semantic search using the global database manager
+        self.chroma_client = db_manager.initialize(
+            os.path.join(self.db_path.parent, "chroma")
+        )
         
         # Create or get collections
         self.code_collection = self.chroma_client.get_or_create_collection(
@@ -526,7 +526,7 @@ class CodeIndexer:
         metadatas = []
         ids = []
         
-        for entity in entities:
+        for i, entity in enumerate(entities):
             # Create searchable document
             doc = f"{entity.name} {entity.type}\n"
             if entity.docstring:
@@ -541,13 +541,36 @@ class CodeIndexer:
                 "start_line": entity.start_line,
                 "end_line": entity.end_line
             })
-            ids.append(f"{entity.file_path}:{entity.name}")
+            # Add a unique identifier to prevent duplicates
+            ids.append(f"{entity.file_path}:{entity.name}:{i}")
         
-        self.code_collection.add(
-            documents=documents,
-            metadatas=metadatas,
-            ids=ids
-        )
+        try:
+            self.code_collection.add(
+                documents=documents,
+                metadatas=metadatas,
+                ids=ids
+            )
+        except Exception as e:
+            self.logger.error(
+                "Error adding to vector database",
+                error=str(e),
+                num_entities=len(entities)
+            )
+            # Try adding one by one to identify problematic entries
+            for i, (doc, meta, id_) in enumerate(zip(documents, metadatas, ids)):
+                try:
+                    self.code_collection.add(
+                        documents=[doc],
+                        metadatas=[meta],
+                        ids=[id_]
+                    )
+                except Exception as e:
+                    self.logger.error(
+                        "Error adding single entity",
+                        error=str(e),
+                        entity_id=id_,
+                        file_path=meta["file_path"]
+                    )
 
     async def find_relevant_code(self, query: str, limit: int = 5) -> List[CodeEntity]:
         """Find code entities relevant to a query.
@@ -789,4 +812,50 @@ class CodeIndexer:
         elif "refactor" in task_description.lower():
             return "modify"
         else:
-            return "analyze" 
+            return "analyze"
+
+    async def index_codebase(self) -> None:
+        """Index the entire codebase.
+        
+        This method walks through all Python files in the workspace and indexes them.
+        """
+        self.logger.info("Starting codebase indexing", workspace_path=str(self.workspace_path))
+        
+        # Define directories and files to ignore
+        ignore_patterns = {
+            'node_modules',
+            'venv',
+            'env',
+            '__pycache__',
+            '.git',
+            '.pytest_cache',
+            'dist',
+            'build',
+            '.vscode',
+            '.idea'
+        }
+        
+        try:
+            # Walk through all Python files in the workspace
+            for root, dirs, files in os.walk(self.workspace_path):
+                # Remove ignored directories from dirs list (modifying in place)
+                dirs[:] = [d for d in dirs if d not in ignore_patterns]
+                
+                for file in files:
+                    if file.endswith('.py'):
+                        file_path = Path(root) / file
+                        try:
+                            await self._index_file(file_path)
+                        except Exception as e:
+                            self.logger.error(
+                                "Error indexing file",
+                                file_path=str(file_path),
+                                error=str(e)
+                            )
+                            continue
+            
+            self.logger.info("Codebase indexing completed")
+            
+        except Exception as e:
+            self.logger.error("Error during codebase indexing", error=str(e))
+            raise 

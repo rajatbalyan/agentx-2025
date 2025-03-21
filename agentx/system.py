@@ -1,108 +1,160 @@
-import asyncio
+"""Main system class for AgentX framework."""
+
 import os
-from typing import Dict, Any
-from agentx.config.agent_config import SystemConfig
+import asyncio
+import yaml
+from typing import Dict, Any, Optional
+import structlog
+from pathlib import Path
+from agentx.common_libraries.system_config import SystemConfig
+from agentx.common_libraries.chroma_client import get_chroma_client, reset_chroma_client
+from agentx.common_libraries.base_agent import AgentConfig
 from agentx.read_agent.read_agent import ReadAgent
 from agentx.manager_agent.manager_agent import ManagerAgent
-from agentx.specialized_agents.content_update_agent.content_update_agent import ContentUpdateAgent
-from agentx.specialized_agents.error_fixing_agent.error_fixing_agent import ErrorFixingAgent
-from agentx.specialized_agents.seo_optimization_agent.seo_optimization_agent import SEOOptimizationAgent
-from agentx.specialized_agents.content_generation_agent.content_generation_agent import ContentGenerationAgent
-from agentx.specialized_agents.performance_monitoring_agent.performance_monitoring_agent import PerformanceMonitoringAgent
-from agentx.cicd_deployment_agent.cicd_deployment_agent import CICDDeploymentAgent
+from datetime import datetime
+
+logger = structlog.get_logger()
 
 class AgentXSystem:
-    """Main system class that initializes and manages all agents"""
+    """Main system class that manages all agents."""
     
-    def __init__(self):
-        self.config = SystemConfig()
-        self.agents = {}
-        self._setup_directories()
+    def __init__(self, config_path: str = "agentx.config.yaml"):
+        """Initialize the system.
+        
+        Args:
+            config_path: Path to configuration file
+        """
+        self.config_path = config_path
+        self.config = SystemConfig.load(config_path)
+        self.agents: Dict[str, Any] = {}
+        self.logger = logger.bind(system="agentx")
+        
+        # Reset any existing ChromaDB client to ensure consistent settings
+        reset_chroma_client()
+        
+        # Initialize a single ChromaDB client for the entire system
+        self.chroma_client = get_chroma_client(
+            os.path.join(self.config.memory.vector_store_path, "vectors", "chroma")
+        )
     
-    def _setup_directories(self) -> None:
-        """Create necessary directories"""
-        directories = [
-            "data/memory/vectors",
-            "data/memory/conversations",
-            "logs",
-            "temp"
-        ]
-        
-        for directory in directories:
-            os.makedirs(directory, exist_ok=True)
+    async def initialize(self) -> None:
+        """Initialize the system and all agents."""
+        try:
+            # Check for required API keys
+            if not self.config.api_keys.get('google_api_key'):
+                raise ValueError("Google API key not found in configuration")
+            
+            # Initialize ReadAgent
+            read_agent_config = AgentConfig(
+                name="read_agent",
+                description="Agent responsible for reading and analyzing code",
+                enabled=True,
+                max_retries=3,
+                timeout=300,
+                temperature=0.7,
+                max_tokens=1000
+            )
+            self.agents["read_agent"] = ReadAgent(
+                config=read_agent_config,
+                system_config=self.config
+            )
+            
+            # Initialize ManagerAgent
+            manager_agent_config = AgentConfig(
+                name="manager_agent",
+                description="Agent responsible for coordinating other agents",
+                enabled=True,
+                max_retries=3,
+                timeout=300,
+                temperature=0.7,
+                max_tokens=1000
+            )
+            self.agents["manager_agent"] = ManagerAgent(
+                config=manager_agent_config,
+                system_config=self.config
+            )
+            
+            # Initialize all agents
+            for agent in self.agents.values():
+                await agent.initialize()
+                
+            self.logger.info("System initialized successfully")
+            
+        except Exception as e:
+            self.logger.error("Error initializing system", error=str(e))
+            raise
     
-    async def initialize_agents(self) -> None:
-        """Initialize all agents"""
-        # Create agents
-        self.agents["read"] = ReadAgent(
-            self.config.get_agent_config("read")
-        )
+    async def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Process input data through the system.
         
-        self.agents["manager"] = ManagerAgent(
-            self.config.get_agent_config("manager")
-        )
-        
-        self.agents["content_update"] = ContentUpdateAgent(
-            self.config.get_agent_config("content_update")
-        )
-        
-        self.agents["error_fixing"] = ErrorFixingAgent(
-            self.config.get_agent_config("error_fixing")
-        )
-        
-        self.agents["seo_optimization"] = SEOOptimizationAgent(
-            self.config.get_agent_config("seo_optimization")
-        )
-        
-        self.agents["content_generation"] = ContentGenerationAgent(
-            self.config.get_agent_config("content_generation")
-        )
-        
-        self.agents["performance_monitoring"] = PerformanceMonitoringAgent(
-            self.config.get_agent_config("performance_monitoring")
-        )
-        
-        self.agents["cicd_deployment"] = CICDDeploymentAgent(
-            self.config.get_agent_config("cicd_deployment")
-        )
-        
-        # Initialize each agent
-        for agent in self.agents.values():
-            await agent.initialize()
-        
-        # Register specialized agents with manager
-        manager = self.agents["manager"]
-        for agent_type, agent in self.agents.items():
-            if agent_type != "manager":
-                await manager.register_agent(agent_type, agent)
+        Args:
+            input_data: Input data to process
+            
+        Returns:
+            Processing results
+        """
+        try:
+            # Process through read agent
+            read_result = await self.agents["read_agent"].process(input_data)
+            
+            # Process through manager agent
+            manager_result = await self.agents["manager_agent"].process(read_result)
+            
+            return {
+                "status": "success",
+                "read_result": read_result,
+                "manager_result": manager_result
+            }
+            
+        except Exception as e:
+            self.logger.error("Error processing input", error=str(e))
+            return {
+                "status": "error",
+                "error": str(e)
+            }
     
-    async def start_monitoring(self, url: str) -> Dict[str, Any]:
-        """Start monitoring a website"""
-        # Start with READ agent analysis
-        read_result = await self.agents["read"].process({
-            "url": url
-        })
+    async def cleanup(self):
+        """Clean up system resources."""
+        try:
+            for agent in self.agents.values():
+                await agent.cleanup()
+            self.logger.info("System cleaned up")
+        except Exception as e:
+            self.logger.error("Error during cleanup", error=str(e))
+
+    async def process_task(self, task_type: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Process a task through the appropriate agent.
         
-        if read_result["status"] == "error":
-            return read_result
-        
-        # Execute complete workflow through manager
-        return await self.agents["manager"].process({
-            "task_type": "workflow",
-            "data": read_result
-        })
-    
-    async def cleanup(self) -> None:
-        """Cleanup all agents"""
-        for agent in self.agents.values():
-            await agent.cleanup()
-    
-    async def health_check(self) -> Dict[str, Any]:
-        """Check health of all agents"""
-        health_status = {}
-        for agent_type, agent in self.agents.items():
-            health_status[agent_type] = await agent.health_check()
-        return health_status
+        Args:
+            task_type: Type of task to process
+            data: Task data
+            
+        Returns:
+            Processing results
+        """
+        try:
+            # Get the appropriate agent
+            agent = self.agents.get(task_type)
+            if not agent:
+                raise ValueError(f"No agent found for task type: {task_type}")
+            
+            # Process the task
+            result = await agent.process(data)
+            
+            # Store the result in memory
+            await self.memory_manager.add_interaction({
+                "type": "task_result",
+                "task_type": task_type,
+                "data": data,
+                "result": result,
+                "timestamp": datetime.now().isoformat()
+            })
+            
+            return result
+            
+        except Exception as e:
+            self.logger.error("Error processing task", error=str(e))
+            raise
 
 async def main():
     """Main entry point"""
@@ -126,11 +178,11 @@ async def main():
     try:
         # Initialize system
         system = AgentXSystem()
-        await system.initialize_agents()
+        await system.initialize()
         
         # Example: Start monitoring a website
         url = "https://example.com"  # Replace with actual URL
-        result = await system.start_monitoring(url)
+        result = await system.process({"url": url})
         print(f"Monitoring result: {result}")
         
     except Exception as e:

@@ -1,179 +1,198 @@
+"""Read agent for AgentX framework."""
+
 from typing import Dict, Any, List
 import asyncio
-from playwright.async_api import async_playwright
 import json
 import subprocess
-from pathlib import Path
+from datetime import datetime
 import structlog
+from pathlib import Path
 from langchain.schema import HumanMessage, SystemMessage
 from agentx.common_libraries.base_agent import BaseAgent, AgentConfig
+from agentx.common_libraries.system_config import SystemConfig
+from agentx.common_libraries.code_indexer import CodeIndexer
+
+logger = structlog.get_logger()
 
 class ReadAgent(BaseAgent):
     """Agent responsible for reading and analyzing website content"""
     
-    def __init__(self, config: AgentConfig):
-        super().__init__(config)
-        self.browser = None
-        self.context = None
-        self.page = None
+    def __init__(self, config: AgentConfig, system_config: SystemConfig):
+        super().__init__(config, system_config)
+        self.logger = logger.bind(agent="read_agent")
+        
+        # Get workspace path from configuration
+        workspace_path = system_config.workspace.path
+        
+        # Convert relative path to absolute
+        if workspace_path == '.':
+            workspace_path = Path.cwd().absolute()
+        else:
+            workspace_path = Path(workspace_path).absolute()
+            
+        self.logger.info("Initializing code indexer", workspace_path=str(workspace_path))
+        
+        # Initialize code indexer
+        self.code_indexer = CodeIndexer(
+            workspace_path=str(workspace_path),
+            db_path="data/memory/vectors"
+        )
     
     async def initialize(self) -> None:
-        """Initialize Playwright and other resources"""
+        """Initialize the agent"""
         await super().initialize()
-        playwright = await async_playwright().start()
-        self.browser = await playwright.chromium.launch()
-        self.context = await self.browser.new_context()
-        self.page = await self.context.new_page()
+        # Index the codebase
+        await self.code_indexer.index_codebase()
+        self.logger.info("Read agent initialized")
     
     async def run_audit_tools(self, url: str) -> Dict[str, Any]:
-        """Run various audit tools on the webpage"""
-        results = {}
-        
-        # HTMLHint analysis
+        """Run website audit tools"""
         try:
-            html_content = await self.page.content()
-            with open("temp.html", "w", encoding="utf-8") as f:
-                f.write(html_content)
-            htmlhint_result = subprocess.run(
-                ["htmlhint", "temp.html", "--format", "json"],
-                capture_output=True,
-                text=True
-            )
-            results["htmlhint"] = json.loads(htmlhint_result.stdout)
-        except Exception as e:
-            self.logger.error("htmlhint_error", error=str(e))
-            results["htmlhint"] = {"error": str(e)}
-        
-        # Lighthouse analysis
-        try:
-            lighthouse_result = subprocess.run(
-                ["lighthouse", url, "--output", "json", "--quiet"],
-                capture_output=True,
-                text=True
-            )
-            results["lighthouse"] = json.loads(lighthouse_result.stdout)
-        except Exception as e:
-            self.logger.error("lighthouse_error", error=str(e))
-            results["lighthouse"] = {"error": str(e)}
-        
-        # WebHint analysis
-        try:
-            webhint_result = subprocess.run(
+            # Run WebHint analysis using CLI
+            result = subprocess.run(
                 ["hint", url, "--format", "json"],
                 capture_output=True,
                 text=True
             )
-            results["webhint"] = json.loads(webhint_result.stdout)
+            
+            if result.returncode != 0:
+                self.logger.error("webhint_error", error=result.stderr)
+                return {}
+            
+            # Parse WebHint results
+            webhint_results = json.loads(result.stdout)
+            
+            # Process results
+            audit_data = {
+                "accessibility": self._process_accessibility_hints(webhint_results),
+                "performance": self._process_performance_hints(webhint_results),
+                "best_practices": self._process_best_practices_hints(webhint_results),
+                "seo": self._process_seo_hints(webhint_results),
+                "security": self._process_security_hints(webhint_results)
+            }
+            
+            return audit_data
+            
         except Exception as e:
-            self.logger.error("webhint_error", error=str(e))
-            results["webhint"] = {"error": str(e)}
-        
-        return results
+            self.logger.error("audit_error", url=url, error=str(e))
+            return {}
+    
+    def _process_accessibility_hints(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Process accessibility hints"""
+        return [
+            {
+                "message": hint["message"],
+                "severity": hint["severity"],
+                "category": "accessibility"
+            }
+            for hint in results
+            if hint.get("category", "").lower() == "accessibility"
+        ]
+    
+    def _process_performance_hints(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Process performance hints"""
+        return [
+            {
+                "message": hint["message"],
+                "severity": hint["severity"],
+                "category": "performance"
+            }
+            for hint in results
+            if hint.get("category", "").lower() == "performance"
+        ]
+    
+    def _process_best_practices_hints(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Process best practices hints"""
+        return [
+            {
+                "message": hint["message"],
+                "severity": hint["severity"],
+                "category": "best_practices"
+            }
+            for hint in results
+            if hint.get("category", "").lower() == "best_practices"
+        ]
+    
+    def _process_seo_hints(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Process SEO hints"""
+        return [
+            {
+                "message": hint["message"],
+                "severity": hint["severity"],
+                "category": "seo"
+            }
+            for hint in results
+            if hint.get("category", "").lower() == "seo"
+        ]
+    
+    def _process_security_hints(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Process security hints"""
+        return [
+            {
+                "message": hint["message"],
+                "severity": hint["severity"],
+                "category": "security"
+            }
+            for hint in results
+            if hint.get("category", "").lower() == "security"
+        ]
     
     def normalize_data(self, audit_results: Dict[str, Any]) -> Dict[str, Any]:
-        """Normalize audit data into a unified format"""
+        """Normalize audit results"""
         normalized = {
-            "html_quality": {
-                "errors": [],
-                "warnings": []
-            },
-            "accessibility": {
-                "score": None,
-                "issues": []
-            },
-            "performance": {
-                "score": None,
-                "metrics": {}
-            },
-            "seo": {
-                "score": None,
-                "issues": []
-            }
+            "accessibility_score": self._calculate_score(audit_results.get("accessibility", [])),
+            "performance_score": self._calculate_score(audit_results.get("performance", [])),
+            "best_practices_score": self._calculate_score(audit_results.get("best_practices", [])),
+            "seo_score": self._calculate_score(audit_results.get("seo", [])),
+            "security_score": self._calculate_score(audit_results.get("security", [])),
+            "hints": []
         }
         
-        # Process HTMLHint results
-        if "htmlhint" in audit_results:
-            for issue in audit_results["htmlhint"].get("messages", []):
-                normalized["html_quality"]["errors"].append({
-                    "message": issue.get("message"),
-                    "line": issue.get("line"),
-                    "rule": issue.get("rule")
-                })
-        
-        # Process Lighthouse results
-        if "lighthouse" in audit_results:
-            lh = audit_results["lighthouse"]
-            categories = lh.get("categories", {})
-            
-            if "accessibility" in categories:
-                normalized["accessibility"]["score"] = categories["accessibility"].get("score")
-                
-            if "performance" in categories:
-                normalized["performance"]["score"] = categories["performance"].get("score")
-                normalized["performance"]["metrics"] = lh.get("audits", {}).get("metrics", {})
-                
-            if "seo" in categories:
-                normalized["seo"]["score"] = categories["seo"].get("score")
-        
-        # Process WebHint results
-        if "webhint" in audit_results:
-            for hint in audit_results["webhint"]:
-                category = hint.get("category", "").lower()
-                if category in normalized:
-                    normalized[category]["issues"].append({
-                        "message": hint.get("message"),
-                        "severity": hint.get("severity")
-                    })
+        # Combine all hints
+        for category in ["accessibility", "performance", "best_practices", "seo", "security"]:
+            hints = audit_results.get(category, [])
+            normalized["hints"].extend(hints)
         
         return normalized
     
+    def _calculate_score(self, hints: List[Dict[str, Any]]) -> float:
+        """Calculate score based on hint severity"""
+        if not hints:
+            return 100.0
+            
+        severity_weights = {
+            "error": 0.0,
+            "warning": 0.5,
+            "hint": 0.8
+        }
+        
+        total_weight = 0
+        weighted_sum = 0
+        
+        for hint in hints:
+            weight = severity_weights.get(hint["severity"], 0.5)
+            total_weight += weight
+            weighted_sum += weight * 100
+            
+        return weighted_sum / total_weight if total_weight > 0 else 100.0
+    
     def generate_prompt(self, normalized_data: Dict[str, Any]) -> str:
-        """Generate a prompt for the Manager Agent based on normalized data"""
-        prompt = "Website Analysis Summary:\n\n"
+        """Generate prompt for LLM"""
+        prompt = f"""Analyze the following website audit results:
+
+Accessibility Score: {normalized_data['accessibility_score']:.1f}/100
+Performance Score: {normalized_data['performance_score']:.1f}/100
+Best Practices Score: {normalized_data['best_practices_score']:.1f}/100
+SEO Score: {normalized_data['seo_score']:.1f}/100
+Security Score: {normalized_data['security_score']:.1f}/100
+
+Issues Found:
+"""
         
-        # HTML Quality
-        errors = normalized_data["html_quality"]["errors"]
-        prompt += f"HTML Quality Issues: {len(errors)} found\n"
-        if errors:
-            prompt += "Top issues:\n"
-            for error in errors[:3]:
-                prompt += f"- {error['message']} (Line {error['line']})\n"
-        
-        # Accessibility
-        acc_score = normalized_data["accessibility"]["score"]
-        prompt += f"\nAccessibility Score: {acc_score*100 if acc_score else 'N/A'}%\n"
-        acc_issues = normalized_data["accessibility"]["issues"]
-        if acc_issues:
-            prompt += "Key accessibility issues:\n"
-            for issue in acc_issues[:3]:
-                prompt += f"- {issue['message']}\n"
-        
-        # Performance
-        perf_score = normalized_data["performance"]["score"]
-        prompt += f"\nPerformance Score: {perf_score*100 if perf_score else 'N/A'}%\n"
-        metrics = normalized_data["performance"]["metrics"]
-        if metrics:
-            prompt += "Key metrics:\n"
-            for metric, value in list(metrics.items())[:3]:
-                prompt += f"- {metric}: {value}\n"
-        
-        # SEO
-        seo_score = normalized_data["seo"]["score"]
-        prompt += f"\nSEO Score: {seo_score*100 if seo_score else 'N/A'}%\n"
-        seo_issues = normalized_data["seo"]["issues"]
-        if seo_issues:
-            prompt += "Key SEO issues:\n"
-            for issue in seo_issues[:3]:
-                prompt += f"- {issue['message']}\n"
-        
-        prompt += "\nRequired Actions:\n"
-        prompt += "1. Address critical HTML errors\n"
-        if acc_score and acc_score < 0.9:
-            prompt += "2. Improve accessibility\n"
-        if perf_score and perf_score < 0.9:
-            prompt += "3. Optimize performance\n"
-        if seo_score and seo_score < 0.9:
-            prompt += "4. Enhance SEO\n"
+        for hint in normalized_data["hints"]:
+            prompt += f"- [{hint['severity'].upper()}] {hint['message']}\n"
+            
+        prompt += "\nPlease provide a detailed analysis of the website's health and recommendations for improvement."
         
         return prompt
     
@@ -184,10 +203,6 @@ class ReadAgent(BaseAgent):
             raise ValueError("URL is required")
         
         try:
-            # Navigate to the page
-            await self.page.goto(url)
-            await self.page.wait_for_load_state("networkidle")
-            
             # Run audit tools
             audit_results = await self.run_audit_tools(url)
             
@@ -219,11 +234,6 @@ class ReadAgent(BaseAgent):
             }
     
     async def cleanup(self) -> None:
-        """Cleanup Playwright resources"""
-        if self.page:
-            await self.page.close()
-        if self.context:
-            await self.context.close()
-        if self.browser:
-            await self.browser.close()
-        await super().cleanup() 
+        """Cleanup agent resources"""
+        await super().cleanup()
+        self.logger.info("Read agent cleaned up") 

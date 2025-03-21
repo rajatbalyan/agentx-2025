@@ -1,3 +1,8 @@
+# Configuration files with sensitive data
+config/*.config.yaml
+.env
+.env.*
+
 # Python
 __pycache__/
 *.py[cod]
@@ -23,24 +28,22 @@ wheels/
 # Virtual Environment
 agentx-env/
 venv/
-ENV/
 env/
-.env
+ENV/
 
 # IDE
 .idea/
 .vscode/
 *.swp
 *.swo
-.project
-.pydevproject
-.settings/
+
+# Logs
+*.log
+logs/
 
 # AgentX specific
 data/memory/*
 !data/memory/.gitkeep
-logs/*
-!logs/.gitkeep
 temp/*
 !temp/.gitkeep
 models/*
@@ -77,6 +80,5 @@ dump.rdb
 # OS specific
 .DS_Store
 Thumbs.db
-*.log
 *.tmp
 *.bak 

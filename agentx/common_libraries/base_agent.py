@@ -1,83 +1,131 @@
-"""Base agent class for AgentX framework."""
+"""Base agent class for all specialized agents."""
 
 import asyncio
+import os
 from typing import Any, Dict, List, Optional
 import structlog
 from pydantic import BaseModel
-from langchain.chat_models import ChatGoogleGenerativeAI
-from langmem import Memory
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.output_parsers import PydanticOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from datetime import datetime
+
+from agentx.common_libraries.memory_manager import MemoryManager
+from agentx.common_libraries.system_config import SystemConfig
+from agentx.common_libraries.db_manager import db_manager
 from .code_indexer import CodeIndexer
 
 logger = structlog.get_logger()
 
+class AgentResponse(BaseModel):
+    """Response model for agent outputs."""
+    status: str
+    result: str
+    error: Optional[str] = None
+
 class AgentConfig(BaseModel):
     """Configuration for an agent."""
     name: str
-    port: int
-    model_path: Optional[str] = None
-    memory_path: Optional[str] = None
-    api_key: Optional[str] = None
-    workspace_path: Optional[str] = None
+    description: str
+    enabled: bool = True
+    max_retries: int = 3
+    timeout: int = 300
+    temperature: float = 0.7
+    max_tokens: int = 1000
 
 class BaseAgent:
-    """Base class for all agents in the AgentX framework."""
-
-    def __init__(self, config: AgentConfig):
-        """Initialize the base agent.
-        
-        Args:
-            config: Agent configuration
-        """
+    """Base class for all specialized agents."""
+    
+    def __init__(
+        self,
+        config: AgentConfig,
+        system_config: SystemConfig,
+        memory_manager: Optional[MemoryManager] = None
+    ):
+        """Initialize the agent."""
         self.config = config
-        self.name = config.name
-        self.port = config.port
-        self.logger = logger.bind(agent=self.name)
+        self.system_config = system_config
+        self.memory_manager = memory_manager or MemoryManager()
         
-        # Initialize LLM
-        if config.api_key:
-            self.llm = ChatGoogleGenerativeAI(
-                model="gemini-pro",
-                google_api_key=config.api_key,
-                temperature=0.7
+        # Initialize ChromaDB client using the global database manager
+        self.chroma_client = db_manager.initialize(
+            os.path.join(system_config.memory.vector_store_path, "vectors", "chroma")
+        )
+        
+        # Initialize the collection for this agent
+        self.collection = self.chroma_client.get_or_create_collection(
+            name=f"{self.config.name}_memory"
+        )
+        
+        # Get API key from system config
+        api_key = self.system_config.api_keys.get('google_api_key')
+        if not api_key:
+            raise ValueError("Google API key not found in system configuration")
+        
+        # Initialize the LLM with API key from system config
+        self.llm = ChatGoogleGenerativeAI(
+            model="gemini-pro",
+            google_api_key=api_key,
+            temperature=self.config.temperature,
+            max_output_tokens=self.config.max_tokens,
+            convert_system_message_to_human=True
+        )
+        
+        # Initialize output parser
+        self.output_parser = PydanticOutputParser(pydantic_object=AgentResponse)
+        
+        # Initialize prompt template
+        self.prompt = ChatPromptTemplate.from_messages([
+            ("system", "You are a helpful AI assistant."),
+            ("human", "{input}")
+        ])
+        
+        self.logger = logger.bind(agent=self.config.name)
+    
+    async def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Process the input data."""
+        try:
+            # Add to memory
+            self.collection.add(
+                documents=[str(input_data)],
+                metadatas=[{"type": "input", "timestamp": str(datetime.now())}],
+                ids=[f"input_{len(self.collection.get()['ids'])}"]
             )
-        
-        # Initialize memory
-        if config.memory_path:
-            self.memory = Memory(
-                storage_path=config.memory_path,
-                agent_name=self.name
+            
+            # Process the input
+            messages = self.prompt.format_messages(
+                task_description=self.config.description,
+                input=str(input_data)
             )
-        
-        # Initialize code indexer
-        if config.workspace_path:
-            self.code_indexer = CodeIndexer(
-                workspace_path=config.workspace_path,
-                db_path=f"{config.memory_path}/code_index"
+            
+            response = await self.llm.ainvoke(messages)
+            
+            # Add response to memory
+            self.collection.add(
+                documents=[response.content],
+                metadatas=[{"type": "response", "timestamp": str(datetime.now())}],
+                ids=[f"response_{len(self.collection.get()['ids'])}"]
             )
-        
-        self.logger.info("Agent initialized", port=self.port)
+            
+            return {"status": "success", "result": response.content}
+            
+        except Exception as e:
+            logger.error("Error processing input", error=str(e))
+            return {"status": "error", "error": str(e)}
+    
+    async def cleanup(self):
+        """Clean up resources."""
+        try:
+            # Persist memory
+            self.chroma_client.persist()
+        except Exception as e:
+            logger.error("Error during cleanup", error=str(e))
 
     async def initialize(self) -> None:
         """Initialize the agent and index codebase."""
         if hasattr(self, 'code_indexer'):
             await self.code_indexer.index_codebase()
-
-    async def process(self, task: Dict[str, Any]) -> Dict[str, Any]:
-        """Process a task.
-        
-        Args:
-            task: Task to process
-            
-        Returns:
-            Processing results
-        """
-        raise NotImplementedError("Subclasses must implement process()")
-
-    async def cleanup(self) -> None:
-        """Cleanup agent resources."""
-        if hasattr(self, 'memory'):
-            await self.memory.cleanup()
-        self.logger.info("Agent cleaned up")
 
     def health_check(self) -> bool:
         """Check if the agent is healthy.
