@@ -11,6 +11,8 @@ from agentx.common_libraries.chroma_client import get_chroma_client, reset_chrom
 from agentx.common_libraries.base_agent import AgentConfig
 from agentx.read_agent.read_agent import ReadAgent
 from agentx.manager_agent.manager_agent import ManagerAgent
+from agentx.specialized_agents.performance_monitoring_agent.performance_monitoring_agent import PerformanceMonitoringAgent
+from agentx.specialized_agents.seo_optimization_agent.seo_optimization_agent import SEOOptimizationAgent
 from datetime import datetime
 
 logger = structlog.get_logger()
@@ -88,6 +90,49 @@ class AgentXSystem:
             self.agents["manager"] = manager_agent
             self.logger.info("ManagerAgent initialized and registered", agent_type="manager")
             
+            # Initialize specialized agents
+            self.logger.info("Initializing specialized agents")
+            
+            # Performance Monitoring Agent
+            performance_agent_config = AgentConfig(
+                name="performance_monitoring_agent",
+                description="Agent responsible for performance optimization",
+                model_name=self.config.model.name,
+                temperature=self.config.model.temperature,
+                max_tokens=self.config.model.max_tokens,
+                top_p=self.config.model.top_p
+            )
+            
+            performance_agent = PerformanceMonitoringAgent(
+                config=performance_agent_config,
+                system_config=self.config
+            )
+            await performance_agent.initialize()
+            
+            # Register with manager agent
+            manager_agent.register_agent("performance_monitoring", performance_agent)
+            self.logger.info("PerformanceMonitoringAgent initialized and registered")
+            
+            # SEO Optimization Agent
+            seo_agent_config = AgentConfig(
+                name="seo_optimization_agent",
+                description="Agent responsible for SEO optimization",
+                model_name=self.config.model.name,
+                temperature=self.config.model.temperature,
+                max_tokens=self.config.model.max_tokens,
+                top_p=self.config.model.top_p
+            )
+            
+            seo_agent = SEOOptimizationAgent(
+                config=seo_agent_config,
+                system_config=self.config
+            )
+            await seo_agent.initialize()
+            
+            # Register with manager agent
+            manager_agent.register_agent("seo_optimization", seo_agent)
+            self.logger.info("SEOOptimizationAgent initialized and registered")
+            
             self.logger.info(
                 "System initialized successfully",
                 registered_agents=list(self.agents.keys())
@@ -97,44 +142,6 @@ class AgentXSystem:
             self.logger.error("Error initializing system", error=str(e))
             raise
     
-    async def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Process input data through the system.
-        
-        Args:
-            input_data: Input data to process
-            
-        Returns:
-            Processing results
-        """
-        try:
-            # Process through read agent
-            read_result = await self.agents["read"].process(input_data)
-            
-            # Process through manager agent
-            manager_result = await self.agents["manager"].process(read_result)
-            
-            return {
-                "status": "success",
-                "read_result": read_result,
-                "manager_result": manager_result
-            }
-            
-        except Exception as e:
-            self.logger.error("Error processing input", error=str(e))
-            return {
-                "status": "error",
-                "error": str(e)
-            }
-    
-    async def cleanup(self):
-        """Clean up system resources."""
-        try:
-            for agent in self.agents.values():
-                await agent.cleanup()
-            self.logger.info("System cleaned up")
-        except Exception as e:
-            self.logger.error("Error during cleanup", error=str(e))
-
     async def process_task(self, task_type: str, data: Dict[str, Any]) -> Dict[str, Any]:
         """Process a task through the appropriate agent.
         
@@ -164,6 +171,12 @@ class AgentXSystem:
             # Process the task
             result = await agent.process(data)
             
+            # If this is a read task, also process through manager for subtask creation
+            if task_type == "read" and result.get("status") == "success":
+                self.logger.info("Processing read result through manager for subtask creation")
+                manager_result = await self.agents["manager"].process(result)
+                result["manager_actions"] = manager_result
+            
             # Log the task result
             self.logger.info(
                 "Task processed successfully",
@@ -181,6 +194,15 @@ class AgentXSystem:
                 available_agents=list(self.agents.keys())
             )
             raise
+    
+    async def cleanup(self):
+        """Clean up system resources."""
+        try:
+            for agent in self.agents.values():
+                await agent.cleanup()
+            self.logger.info("System cleaned up")
+        except Exception as e:
+            self.logger.error("Error during cleanup", error=str(e))
 
 async def main():
     """Main entry point"""

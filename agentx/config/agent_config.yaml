@@ -1,0 +1,111 @@
+# Agent configuration file
+
+# System-wide settings
+system:
+  log_level: INFO
+  max_concurrent_tasks: 5
+  task_timeout_seconds: 300
+
+# Specialized agents configuration
+agents:
+  - id: web_agent
+    type: web
+    capabilities:
+      - html
+      - css
+      - javascript
+      - responsive_design
+      - seo_optimization
+      - performance_optimization
+    max_tasks: 3
+    priority: high
+  
+  - id: security_agent
+    type: security
+    capabilities:
+      - vulnerability_scan
+      - code_audit
+      - dependency_check
+      - security_testing
+      - compliance_check
+    max_tasks: 2
+    priority: critical
+  
+  - id: performance_agent
+    type: performance
+    capabilities:
+      - profiling
+      - benchmarking
+      - optimization
+      - load_testing
+      - memory_analysis
+    max_tasks: 2
+    priority: medium
+  
+  - id: testing_agent
+    type: testing
+    capabilities:
+      - unit_testing
+      - integration_testing
+      - e2e_testing
+      - test_coverage
+      - test_automation
+    max_tasks: 3
+    priority: high
+  
+  - id: deployment_agent
+    type: deployment
+    capabilities:
+      - continuous_integration
+      - continuous_deployment
+      - container_management
+      - cloud_deployment
+      - infrastructure_management
+    max_tasks: 1
+    priority: critical
+
+# Task type definitions
+task_types:
+  web_task:
+    required_capabilities:
+      - html
+      - css
+      - javascript
+    default_priority: medium
+  
+  security_task:
+    required_capabilities:
+      - vulnerability_scan
+      - code_audit
+    default_priority: high
+  
+  performance_task:
+    required_capabilities:
+      - profiling
+      - optimization
+    default_priority: medium
+  
+  testing_task:
+    required_capabilities:
+      - unit_testing
+      - integration_testing
+    default_priority: medium
+  
+  deployment_task:
+    required_capabilities:
+      - continuous_integration
+      - continuous_deployment
+    default_priority: high
+
+# Priority levels and their weights
+priorities:
+  critical: 100
+  high: 75
+  medium: 50
+  low: 25
+
+# Task queue settings
+task_queue:
+  max_size: 100
+  retry_limit: 3
+  retry_delay_seconds: 60 
