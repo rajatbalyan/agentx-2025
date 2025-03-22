@@ -28,6 +28,8 @@ Site Sentry is a powerful framework for autonomous website maintenance, featurin
 ### A. As a framework / tool - local:
 > Setup locally using a python tool, comes with CLI + config 
 
+![local-framework-workflow](https://github.com/user-attachments/assets/b1100a0c-1651-4504-86f4-6f4577a1a389)
+
 
 ```bash
 pip install git+asdhs.com
@@ -38,6 +40,9 @@ pip install git+asdhs.com
 
 ### B. As a service - cloud:
 > Use our provided web interface to host background tasks, via cron or CI/CD
+
+You can access this here:  [SiteSentry](sitesentry.metacatalyst.in/)
+
 
 <be />
 
@@ -84,13 +89,15 @@ Internally, the framework uses LLM agentic system built on top of [LangChain](ht
 - Maintains conversation and document memory
 - Supports context retrieval and similar interaction searching
 
+
+
+
 <br />
 
 
 ### [Site Sentry](https://sitesentry.metacatalyst.in/) - Service
 
-
-![site-sentry-architecture](https://github.com/user-attachments/assets/b71ac9b2-c42a-4599-b72e-23cc085600cd)
+![sentry-site-architecture](https://github.com/user-attachments/assets/bf04c07a-0551-4f4c-ad38-7c4af2caecce)
 
 Site-Sentry acts as a service wrapper around the sentry framework (the tool), which is easier to setup & provides more features like: <br />
 1. CI/CD trigger - changes when any push to a branch in github repo
