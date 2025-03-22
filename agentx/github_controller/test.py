@@ -13,6 +13,5 @@ gh = GitHubController(
 
 
 
-gh.register_self_hosted_runner("test-runner")
-
-
+#gh.register_self_hosted_runner("test-runner")
+gh.create_pull_request("Merge to main", "", "test/branch-1", "main")

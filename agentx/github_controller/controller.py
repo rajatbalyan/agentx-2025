@@ -3,6 +3,7 @@
 
 import requests
 import subprocess
+import os
 
 
 
@@ -14,19 +15,46 @@ class GitHubController:
         self.token = token  #personal access token
         self.repo_owner = repo_owner
         self.repo_name = repo_name
-       
+        
     
-    def create_branch(self, branch_name: str, base_branch: str = "main") -> dict:
+    def create_pull_request(self, title: str, body: str, head: str, base: str = "master") -> dict:
         """
-            Create a new branch from the base branch
+        Create a pull request in the specified repository.
+        
+        Args:
+            owner (str): The owner of the repository
+            repo (str): The name of the repository
+            title (str): The title of the pull request
+            body (str): The description of the pull request
+            head (str): The name of the branch where your changes are implemented
+            base (str): The name of the branch you want the changes pulled into (default: "master")
+            
+        Returns:
+            dict: The response from the GitHub API containing the pull request details
+            
+        Raises:
+            requests.exceptions.RequestException: If the API request fails
         """
-        pass
-    
-    def create_pull_request(self, branch_name: str, title: str, body: str = "") -> dict:
-        """
-            Create a new pull request
-        """
-        pass 
+        url = f"https://api.github.com/repos/{self.repo_owner}/{self.repo_name}/pulls"
+        
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {self.token}",
+            "X-GitHub-Api-Version": "2022-11-28"
+        }
+        
+        data = {
+            "title": title,
+            "body": body,
+            "head": head,
+            "base": base
+        }
+        
+        response = requests.post(url, headers=headers, json=data)
+        response.raise_for_status()
+        
+        return response.json()
+
 
     def register_self_hosted_runner(self, runner_name: str) -> dict:
         """
