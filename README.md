@@ -15,14 +15,15 @@ Site Sentry is a powerful framework for autonomous website maintenance, featurin
 
 ## Using the tools.
 
-> [!TIP]
-> After reading these two steps, if you're wondering: Is there any difference between the two? No internally they do the same action, its your choice on which is more suitable.
-> - More control & changes needed?  local
-> - Quick setup & analsis?  cloud
+### Pre-requisities (external APIs)
+> These APIs aren't paid, all shown in demo here are free of use, and needed for use throughout, so easier to get them in advance:
+- Github:  Personal Access Token
+- Google: Gemini API
 
-<br />
 
-There's two ways to use it:
+<br /> <br />
+
+**There's two ways to use it:**
 
 ### A. As a framework / tool - local:
 > Setup locally using a python tool, comes with CLI + config 
@@ -38,6 +39,12 @@ pip install git+asdhs.com
 ### B. As a service - cloud:
 > Use our provided web interface to host background tasks, via cron or CI/CD
 
+<be />
+
+> [!TIP]
+> After reading these two steps, if you're wondering: Is there any difference between the two? No internally they do the same action, its your choice on which is more suitable.
+> - More control & changes needed?  local
+> - Quick setup & analsis?  cloud
 
 <br />
 
@@ -82,9 +89,29 @@ Internally, the framework uses LLM agentic system built on top of [LangChain](ht
 
 ### [Site Sentry](https://sitesentry.metacatalyst.in/) - Service
 
+
 ![site-sentry-architecture](https://github.com/user-attachments/assets/b71ac9b2-c42a-4599-b72e-23cc085600cd)
 
+Site-Sentry acts as a service wrapper around the sentry framework (the tool), which is easier to setup & provides more features like: <br />
+1. CI/CD trigger - changes when any push to a branch in github repo
+2. CRON job - interval use the framework, make updates in batches
+3. Analysis via Page Speed Insights API on target site.
 
+> These can also be done via tool, but needs to be setup manually
+
+<br />
+
+
+##### Sentry Dashboard
+
+For example, [this site](https://palinifoundation.vercel.app/) is reported on the dashboard after analysis:
+
+![site-sentry-dashboard](https://github.com/user-attachments/assets/7ae7fe82-7c8d-4315-8296-8b4038947ef4)
+
+
+##### Sentry Job
+
+A "Sentry Job" is a background process you can add, to trigger either via CI/CD or CRON job. 
 
 
 
