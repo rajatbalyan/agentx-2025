@@ -2,13 +2,23 @@
 version: '1.0'
 
 # Required System Configuration
-website_url: "https://your-website.com"  # URL of the website to monitor
+website_url: "https://metacatalyst.in"  # URL of the website to monitor
 scan_interval: 3600  # Scan interval in seconds (default: 1 hour)
 
 # API Keys Configuration
 api_keys:
   google_api_key: ""  # Set via environment variable GOOGLE_API_KEY
   github_token: ""    # Set via environment variable GITHUB_TOKEN
+
+# GitHub Configuration
+github:
+  repo_owner: ""  # Set via environment variable GITHUB_OWNER
+  repo_name: ""   # Set via environment variable GITHUB_REPO
+  branch: "main"  # Set via environment variable GITHUB_BRANCH
+  auto_merge: false
+  labels:
+    - agentx
+    - automated
 
 # Workspace Configuration
 workspace:
@@ -70,16 +80,6 @@ schedule:
   retry:
     attempts: 3             # Number of retry attempts
     delay: 300             # Delay between retries (seconds)
-
-# GitHub Integration (Optional)
-github:
-  repo_owner: ${GITHUB_OWNER}  # GitHub username or organization
-  repo_name: ${GITHUB_REPO}    # Repository name
-  branch: ${GITHUB_BRANCH:-main}  # Default branch
-  auto_merge: false        # Auto-merge pull requests
-  labels:                  # Labels for pull requests
-    - agentx
-    - automated
 
 # Agent Settings (Optional)
 agents:

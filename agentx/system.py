@@ -13,6 +13,7 @@ from agentx.read_agent.read_agent import ReadAgent
 from agentx.manager_agent.manager_agent import ManagerAgent
 from agentx.specialized_agents.performance_monitoring_agent.performance_monitoring_agent import PerformanceMonitoringAgent
 from agentx.specialized_agents.seo_optimization_agent.seo_optimization_agent import SEOOptimizationAgent
+from agentx.github_controller.controller import GitHubController
 from datetime import datetime
 
 logger = structlog.get_logger()
@@ -38,6 +39,13 @@ class AgentXSystem:
         self.chroma_client = get_chroma_client(
             os.path.join(self.config.memory.vector_store_path, "vectors", "chroma")
         )
+        
+        # Initialize GitHub controller
+        self.github = GitHubController(
+            token=self.config.api_keys.get('github_token', ''),
+            repo_owner=self.config.github.repo_owner,
+            repo_name=self.config.github.repo_name
+        )
     
     async def initialize(self) -> None:
         """Initialize the system and all agents."""
@@ -45,8 +53,16 @@ class AgentXSystem:
             # Check for required API keys
             if not self.config.api_keys.get('google_api_key'):
                 raise ValueError("Google API key not found in configuration")
+            if not self.config.api_keys.get('github_token'):
+                raise ValueError("GitHub token not found in configuration")
             
             self.logger.info("Starting system initialization")
+            
+            # Ensure we're on the sitesentry branch
+            result = self.github.ensure_sitesentry_branch()
+            if result["status"] != "success":
+                raise ValueError(f"Failed to setup sitesentry branch: {result['message']}")
+            self.logger.info("Successfully set up sitesentry branch", branch=result["branch"])
             
             # Initialize ReadAgent
             self.logger.info("Initializing ReadAgent")
@@ -177,6 +193,19 @@ class AgentXSystem:
                 manager_result = await self.agents["manager"].process(result)
                 result["manager_actions"] = manager_result
             
+            # If changes were made, commit them
+            if result.get("changes_made", False):
+                commit_message = f"AgentX: {task_type} changes - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                if self.github.commit_changes(commit_message):
+                    self.logger.info("Changes committed successfully", commit_message=commit_message)
+                    # Try to push changes
+                    if self.github.push_changes():
+                        self.logger.info("Changes pushed successfully")
+                    else:
+                        self.logger.warning("Failed to push changes")
+                else:
+                    self.logger.warning("Failed to commit changes")
+            
             # Log the task result
             self.logger.info(
                 "Task processed successfully",
@@ -210,7 +239,8 @@ async def main():
     required_env_vars = [
         "GOOGLE_API_KEY",
         "GITHUB_TOKEN",
-        "GITHUB_REPO"
+        "GITHUB_REPO",
+        "GITHUB_OWNER"
     ]
     
     missing_vars = [

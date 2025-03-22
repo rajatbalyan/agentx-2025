@@ -49,6 +49,14 @@ class DevelopmentConfig(BaseModel):
     auto_reload: bool = False
     port: int = 8000
 
+class GitHubConfig(BaseModel):
+    """GitHub configuration."""
+    repo_owner: str = ""
+    repo_name: str = ""
+    branch: str = "main"
+    auto_merge: bool = False
+    labels: List[str] = ["agentx", "automated"]
+
 class SystemConfig(BaseModel):
     """Main system configuration."""
     website_url: str
@@ -60,6 +68,7 @@ class SystemConfig(BaseModel):
     logging: LoggingConfig = LoggingConfig()
     development_mode: DevelopmentConfig = DevelopmentConfig()
     api_keys: Dict[str, str] = {}
+    github: GitHubConfig = GitHubConfig()
 
     @classmethod
     def load(cls, config_path: str) -> 'SystemConfig':
@@ -75,6 +84,16 @@ class SystemConfig(BaseModel):
             'google_api_key': os.getenv('GOOGLE_API_KEY', config_data.get('api_keys', {}).get('google_api_key', '')),
             'github_token': os.getenv('GITHUB_TOKEN', config_data.get('api_keys', {}).get('github_token', ''))
         }
+
+        # Handle GitHub configuration from environment variables
+        if 'github' not in config_data:
+            config_data['github'] = {}
+        
+        config_data['github'].update({
+            'repo_owner': os.getenv('GITHUB_OWNER', config_data['github'].get('repo_owner', '')),
+            'repo_name': os.getenv('GITHUB_REPO', config_data['github'].get('repo_name', '')),
+            'branch': os.getenv('GITHUB_BRANCH', config_data['github'].get('branch', 'main'))
+        })
 
         # Handle workspace path environment variable
         if isinstance(config_data.get('workspace'), dict):

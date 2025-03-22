@@ -12,9 +12,9 @@ def test_github_controller():
     """Test the GitHub controller functionality."""
     # Get GitHub token from environment
     token = os.getenv("GITHUB_TOKEN")
-    print(f"GitHub token: {token}")
     if not token:
         raise ValueError("GITHUB_TOKEN environment variable not set")
+    print("GitHub token loaded successfully")
     
     # Initialize controller
     controller = GitHubController(
