@@ -23,7 +23,8 @@ def cli():
     pass
 
 @cli.command()
-def init():
+@click.option('--workspace', default=None, help='Path to the workspace directory')
+def init(workspace: Optional[str]):
     """Initialize AgentX configuration."""
     try:
         # Create config directory if it doesn't exist
@@ -38,18 +39,37 @@ def init():
             if not click.confirm("Configuration file already exists. Overwrite?"):
                 return
         
-        shutil.copy2(template_path, config_path)
+        # Load template
+        with open(template_path, 'r') as f:
+            config_data = yaml.safe_load(f)
+        
+        # Set workspace path
+        workspace_path = workspace or os.getcwd()
+        config_data['workspace']['path'] = workspace_path
+        
+        # Write configuration
+        with open(config_path, 'w') as f:
+            yaml.dump(config_data, f, default_flow_style=False)
+            
         click.echo(f"Created configuration file at {config_path}")
         
         # Create necessary directories
-        dirs = ["logs", "data/memory", "temp", "models"]
+        dirs = [
+            "logs",
+            "data/memory/vectors",
+            "data/memory/conversations",
+            "temp",
+            "models"
+        ]
         for dir_path in dirs:
             Path(dir_path).mkdir(parents=True, exist_ok=True)
             click.echo(f"Created directory: {dir_path}")
             
         click.echo("\nNext steps:")
-        click.echo("1. Edit config/agentx.config.yaml with your settings")
-        click.echo("2. Set up your environment variables (GOOGLE_API_KEY, GITHUB_TOKEN, etc.)")
+        click.echo("1. Set up your environment variables in .env:")
+        click.echo("   GOOGLE_API_KEY=your-google-api-key")
+        click.echo("   GITHUB_TOKEN=your-github-token")
+        click.echo("2. Edit config/agentx.config.yaml if needed")
         click.echo("3. Run 'python -m agentx.cli dev' to start development server")
         
     except Exception as e:

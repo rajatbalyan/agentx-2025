@@ -1,7 +1,82 @@
 # AgentX Configuration Template
-# -------------------------
-# This file contains all configurable options for the AgentX framework.
-# Copy this file to agentx.config.yaml and modify according to your needs.
+version: '1.0'
+
+# Required System Configuration
+website_url: "https://your-website.com"  # URL of the website to monitor
+scan_interval: 300  # Scan interval in seconds (default: 5 minutes)
+
+# API Keys
+api_keys:
+  google_api_key: ""  # Set via environment variable GOOGLE_API_KEY
+  github_token: ""    # Set via environment variable GITHUB_TOKEN
+
+# Workspace Configuration
+workspace:
+  path: "."  # Default to current directory
+  ignore_patterns:
+    - "**/__pycache__/**"
+    - "**/*.pyc"
+    - "**/node_modules/**"
+    - "**/.git/**"
+    - "**/venv/**"
+    - "**/env/**"
+
+# Memory Configuration
+memory:
+  vector_store_path: "data/memory/vector_store"
+  conversation_memory_path: "data/memory/conversations"
+
+# Model Configuration
+model:
+  provider: "google"     # Model provider
+  name: "gemini-pro"     # Model name
+  model_path: "models"
+  temperature: 0.7
+  max_tokens: 1000
+  top_p: 0.95         # Nucleus sampling parameter
+
+# Logging Configuration
+logging:
+  level: "INFO"
+  file: "logs/agentx.log"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# Development Mode Configuration
+development_mode:
+  enabled: false
+  debug: false
+  auto_reload: false
+  port: 8000
+
+# Agent Configuration
+agent_config:
+  enabled_agents:
+    - "content_update"
+    - "seo_optimization"
+    - "error_fixing"
+    - "content_generation"
+    - "performance_monitoring"
+  max_retries: 3
+  timeout: 300
+
+# Schedule Configuration
+schedule:
+  frequency: "daily"           # Maintenance frequency (hourly, daily, weekly)
+  time: "00:00"             # Time to run (UTC)
+  max_concurrent: 3          # Maximum concurrent tasks
+  retry:
+    attempts: 3             # Number of retry attempts
+    delay: 300             # Delay between retries (seconds)
+
+# GitHub Integration
+github:
+  repo_owner: ${GITHUB_OWNER}  # GitHub username or organization
+  repo_name: ${GITHUB_REPO}    # Repository name
+  branch: ${GITHUB_BRANCH:-main}  # Default branch
+  auto_merge: false        # Auto-merge pull requests
+  labels:                  # Labels for pull requests
+    - agentx
+    - automated
 
 # Workspace Configuration
 # --------------------
@@ -110,22 +185,6 @@ models:
     temperature: 0.7     # Model temperature
     max_tokens: 1000     # Maximum tokens per request
     top_p: 0.95         # Nucleus sampling parameter
-
-# GitHub Integration
-# ---------------
-github:
-  token: your-github-token  # GitHub API token
-  repo: owner/repo          # Repository (owner/repo)
-  branch: main             # Default branch
-  auto_merge: false        # Auto-merge pull requests
-  labels:                  # Labels for pull requests
-    - agentx
-    - automated
-
-# API Keys
-# -------
-api_keys:
-  google: your-google-api-key  # Google API key for Gemini
 
 # Development Mode
 # -------------
