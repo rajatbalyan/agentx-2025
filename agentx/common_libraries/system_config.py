@@ -75,5 +75,26 @@ class SystemConfig(BaseModel):
             'google_api_key': os.getenv('GOOGLE_API_KEY', config_data.get('api_keys', {}).get('google_api_key', '')),
             'github_token': os.getenv('GITHUB_TOKEN', config_data.get('api_keys', {}).get('github_token', ''))
         }
+
+        # Handle workspace path environment variable
+        if isinstance(config_data.get('workspace'), dict):
+            workspace_path = os.getenv('WORKSPACE_PATH', config_data['workspace'].get('path', '.'))
+            config_data['workspace']['path'] = workspace_path
         
-        return cls(**config_data) 
+        return cls(**config_data)
+
+    def validate_workspace(self) -> None:
+        """Validate workspace configuration."""
+        if not self.workspace.path or self.workspace.path.strip() == "":
+            raise ValueError("No workspace path provided")
+        
+        # Expand environment variables and user home
+        self.workspace.path = os.path.expandvars(os.path.expanduser(self.workspace.path))
+        
+        # Convert to absolute path if relative
+        if not os.path.isabs(self.workspace.path):
+            self.workspace.path = os.path.abspath(self.workspace.path)
+        
+        # Ensure directory exists
+        if not os.path.exists(self.workspace.path):
+            os.makedirs(self.workspace.path, exist_ok=True) 

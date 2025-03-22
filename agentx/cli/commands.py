@@ -39,17 +39,20 @@ def init(workspace: Optional[str]):
             if not click.confirm("Configuration file already exists. Overwrite?"):
                 return
         
-        # Load template
-        with open(template_path, 'r') as f:
-            config_data = yaml.safe_load(f)
+        # Instead of loading and dumping YAML, directly copy the template
+        # and then update only the workspace path
+        shutil.copy2(template_path, config_path)
         
-        # Set workspace path
-        workspace_path = workspace or os.getcwd()
-        config_data['workspace']['path'] = workspace_path
-        
-        # Write configuration
-        with open(config_path, 'w') as f:
-            yaml.dump(config_data, f, default_flow_style=False)
+        # Update workspace path if provided
+        if workspace:
+            with open(config_path, 'r') as f:
+                config_data = yaml.safe_load(f)
+            
+            config_data['workspace']['path'] = workspace
+            
+            # Write back with sort_keys=False to preserve order
+            with open(config_path, 'w') as f:
+                yaml.dump(config_data, f, default_flow_style=False, sort_keys=False)
             
         click.echo(f"Created configuration file at {config_path}")
         

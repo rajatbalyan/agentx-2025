@@ -3,16 +3,16 @@ version: '1.0'
 
 # Required System Configuration
 website_url: "https://your-website.com"  # URL of the website to monitor
-scan_interval: 300  # Scan interval in seconds (default: 5 minutes)
+scan_interval: 3600  # Scan interval in seconds (default: 1 hour)
 
-# API Keys
+# API Keys Configuration
 api_keys:
   google_api_key: ""  # Set via environment variable GOOGLE_API_KEY
   github_token: ""    # Set via environment variable GITHUB_TOKEN
 
 # Workspace Configuration
 workspace:
-  path: "."  # Default to current directory
+  path: "."  # Will be overridden by WORKSPACE_PATH environment variable if set
   ignore_patterns:
     - "**/__pycache__/**"
     - "**/*.pyc"
@@ -30,10 +30,10 @@ memory:
 model:
   provider: "google"     # Model provider
   name: "gemini-pro"     # Model name
-  model_path: "models"
-  temperature: 0.7
-  max_tokens: 1000
-  top_p: 0.95         # Nucleus sampling parameter
+  model_path: "models"   # Path to store model files
+  temperature: 0.7      # Model temperature
+  max_tokens: 1000      # Maximum tokens per request
+  top_p: 0.95          # Nucleus sampling parameter
 
 # Logging Configuration
 logging:
@@ -59,7 +59,10 @@ agent_config:
   max_retries: 3
   timeout: 300
 
-# Schedule Configuration
+# Additional Configurations (Optional)
+# These settings are for extended functionality and may not be used by the core system
+
+# Schedule Configuration (Optional)
 schedule:
   frequency: "daily"           # Maintenance frequency (hourly, daily, weekly)
   time: "00:00"             # Time to run (UTC)
@@ -68,7 +71,7 @@ schedule:
     attempts: 3             # Number of retry attempts
     delay: 300             # Delay between retries (seconds)
 
-# GitHub Integration
+# GitHub Integration (Optional)
 github:
   repo_owner: ${GITHUB_OWNER}  # GitHub username or organization
   repo_name: ${GITHUB_REPO}    # Repository name
@@ -78,34 +81,14 @@ github:
     - agentx
     - automated
 
-# Workspace Configuration
-# --------------------
-workspace:
-  path: .  # Path to the workspace (default: current directory)
-  ignore_patterns:  # Patterns to ignore during indexing
-    - "**/__pycache__/**"
-    - "**/*.pyc"
-    - "**/node_modules/**"
-    - "**/.git/**"
-    - "**/venv/**"
-    - "**/env/**"
-
-# Website Configuration
-# -------------------
-website_url: https://your-website.com  # URL of the website to monitor
-scan_interval: 3600                    # Interval between scans in seconds
-
-# Agent Configuration
-# -----------------
+# Agent Settings (Optional)
 agents:
-  # Enable/disable specific agents
   content_update: true         # Updates outdated content
   seo_optimization: true       # Optimizes meta tags and structure
   error_fixing: true          # Fixes detected errors
   content_generation: true     # Generates new content
   performance_monitoring: true # Monitors site performance
 
-  # Agent-specific settings
   settings:
     content_update:
       max_age_days: 30        # Maximum content age before update
@@ -141,55 +124,4 @@ agents:
       thresholds:          # Performance thresholds
         load_time: 3000    # ms
         ttfb: 600         # ms
-        fcp: 1000         # ms
-
-# Schedule Configuration
-# -------------------
-schedule:
-  frequency: daily           # Maintenance frequency (hourly, daily, weekly)
-  time: "00:00"             # Time to run (UTC)
-  max_concurrent: 3          # Maximum concurrent tasks
-  retry:
-    attempts: 3             # Number of retry attempts
-    delay: 300             # Delay between retries (seconds)
-
-# Logging Configuration
-# ------------------
-logging:
-  level: INFO              # Log level (DEBUG, INFO, WARNING, ERROR)
-  file: logs/agentx.log    # Log file path
-  max_size: 100MB          # Maximum log file size
-  backup_count: 5          # Number of backup files
-  format: json             # Log format (json, text)
-
-# Memory Configuration
-# -----------------
-memory:
-  path: data/memory       # Base path for memory storage
-  vector_store:          # Vector store settings
-    path: data/memory/vectors
-    dimension: 1536
-    metric: cosine
-  conversation_store:    # Conversation memory settings
-    path: data/memory/conversations
-    max_age: 30         # Days to keep conversations
-
-# Model Configuration
-# ----------------
-models:
-  paths:
-    seo_agent: models/seo_agent/
-    content_gen: models/content_gen/
-    error_fix: models/error_fix/
-  settings:
-    temperature: 0.7     # Model temperature
-    max_tokens: 1000     # Maximum tokens per request
-    top_p: 0.95         # Nucleus sampling parameter
-
-# Development Mode
-# -------------
-development:
-  enabled: false          # Enable development mode
-  hot_reload: true       # Enable hot reload
-  debug: false           # Enable debug mode
-  mock_apis: false       # Mock external APIs 
+        fcp: 1000         # ms 
