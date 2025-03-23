@@ -66,7 +66,7 @@ class AgentXSystem:
             result = self.github.ensure_sitesentry_branch()
             if result["status"] != "success":
                 raise ValueError(f"Failed to setup sitesentry branch: {result['message']}")
-            self.logger.info("Successfully set up sitesentry branch", branch=result["branch"])
+            self.logger.info("Successfully set up sitesentry branch", branch=result.get("branch_name", "sitesentry-test-branch"))
             
             # Initialize ReadAgent
             self.logger.info("Initializing ReadAgent")
@@ -239,16 +239,22 @@ class AgentXSystem:
             try:
                 if hasattr(self, 'github'):
                     # First try to stash any changes
-                    subprocess.run(["git", "stash", "save", "Temporary stash before cleanup"], 
-                                 cwd=self.config.workspace.path,
-                                 capture_output=True,
-                                 text=True)
+                    subprocess.run(
+                        ["git", "stash", "save", "Temporary stash before cleanup"],
+                        cwd=self.config.workspace.path,
+                        capture_output=True,
+                        text=True,
+                        check=False
+                    )
                     
                     # Then checkout main branch
-                    subprocess.run(["git", "checkout", "main"],
-                                 cwd=self.config.workspace.path,
-                                 capture_output=True,
-                                 text=True)
+                    subprocess.run(
+                        ["git", "checkout", "main"],
+                        cwd=self.config.workspace.path,
+                        capture_output=True,
+                        text=True,
+                        check=False
+                    )
                     
                     self.logger.info("GitHub controller reset")
             except Exception as e:
