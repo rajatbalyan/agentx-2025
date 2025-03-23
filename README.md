@@ -17,8 +17,8 @@ Site Sentry is a powerful framework for autonomous website maintenance, featurin
 
 ### Pre-requisities (external APIs)
 > These APIs aren't paid, all shown in demo here are free of use, and needed for use throughout, so easier to get them in advance:
-- Github:  Personal Access Token
-- Google: Gemini API
+- [Github:  Personal Access Token](https://github.com/settings/tokens)
+- [Google: Gemini API](https://ai.google.dev/gemini-api/docs/api-key)
 
 
 <br /> <br />
@@ -28,21 +28,37 @@ Site Sentry is a powerful framework for autonomous website maintenance, featurin
 ### A. As a framework / tool - local:
 > Setup locally using a python tool, comes with CLI + config 
 
-![local-framework-workflow](https://github.com/user-attachments/assets/b1100a0c-1651-4504-86f4-6f4577a1a389)
-
-
+**1. First install the package:**
 ```bash
-pip install git+asdhs.com
+pip install git+https://github.com/rajatbalyan/agentx-2025.git@feat/sentry-package
 ```
+
+This comes with the "sentry" cli tool, test by running:
+```bash
+sentry
+```
+
+**2. Initialise sentry by creating a config**
+```bash
+sentry init
+```
+
+Some input will be needed as shown:
+![sentry-inputs](https://github.com/user-attachments/assets/d7216fe8-128d-4993-be5a-101d4742cab0)
+
+
+Then, analyse & make changes with:
+```bash
+sentry run
+```
+
+A new branch will be created with changes from the tool.
 
 .
 <br />
 
 ### B. As a service - cloud:
-> Use our provided web interface to host background tasks, via cron or CI/CD
-
-You can access this here:  [SiteSentry](sitesentry.metacatalyst.in/)
-
+> Use [our provided web interface](https://sitesentry.metacatalyst.in/) to host background tasks, via cron or CI/CD
 
 <be />
 
@@ -89,15 +105,13 @@ Internally, the framework uses LLM agentic system built on top of [LangChain](ht
 - Maintains conversation and document memory
 - Supports context retrieval and similar interaction searching
 
-
-
-
 <br />
 
 
 ### [Site Sentry](https://sitesentry.metacatalyst.in/) - Service
 
-![sentry-site-architecture](https://github.com/user-attachments/assets/bf04c07a-0551-4f4c-ad38-7c4af2caecce)
+
+![site-sentry-architecture](https://github.com/user-attachments/assets/b71ac9b2-c42a-4599-b72e-23cc085600cd)
 
 Site-Sentry acts as a service wrapper around the sentry framework (the tool), which is easier to setup & provides more features like: <br />
 1. CI/CD trigger - changes when any push to a branch in github repo
@@ -114,12 +128,5 @@ Site-Sentry acts as a service wrapper around the sentry framework (the tool), wh
 For example, [this site](https://palinifoundation.vercel.app/) is reported on the dashboard after analysis:
 
 ![site-sentry-dashboard](https://github.com/user-attachments/assets/7ae7fe82-7c8d-4315-8296-8b4038947ef4)
-
-
-##### Sentry Job
-
-A "Sentry Job" is a background process you can add, to trigger either via CI/CD or CRON job. 
-
-
 
 
