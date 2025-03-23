@@ -13,8 +13,12 @@ from agentx.read_agent.read_agent import ReadAgent
 from agentx.manager_agent.manager_agent import ManagerAgent
 from agentx.specialized_agents.performance_monitoring_agent.performance_monitoring_agent import PerformanceMonitoringAgent
 from agentx.specialized_agents.seo_optimization_agent.seo_optimization_agent import SEOOptimizationAgent
+from agentx.specialized_agents.content_generation_agent.content_generation_agent import ContentGenerationAgent
+from agentx.specialized_agents.error_fixing_agent.error_fixing_agent import ErrorFixingAgent
 from agentx.github_controller.controller import GitHubController
+from agentx.cicd_deployment_agent.cicd_deployment_agent import CICDDeploymentAgent
 from datetime import datetime
+import subprocess
 
 logger = structlog.get_logger()
 
@@ -109,45 +113,35 @@ class AgentXSystem:
             # Initialize specialized agents
             self.logger.info("Initializing specialized agents")
             
-            # Performance Monitoring Agent
-            performance_agent_config = AgentConfig(
-                name="performance_monitoring_agent",
-                description="Agent responsible for performance optimization",
-                model_name=self.config.model.name,
-                temperature=self.config.model.temperature,
-                max_tokens=self.config.model.max_tokens,
-                top_p=self.config.model.top_p
-            )
+            specialized_agents = {
+                "performance_monitoring": (PerformanceMonitoringAgent, "Agent for performance optimization"),
+                "seo_optimization": (SEOOptimizationAgent, "Agent for SEO improvements"),
+                "content_generation": (ContentGenerationAgent, "Agent for content updates"),
+                "error_fixing": (ErrorFixingAgent, "Agent for fixing errors"),
+                "cicd_deployment": (CICDDeploymentAgent, "Agent for CI/CD deployment")
+            }
             
-            performance_agent = PerformanceMonitoringAgent(
-                config=performance_agent_config,
-                system_config=self.config
-            )
-            await performance_agent.initialize()
-            
-            # Register with manager agent
-            manager_agent.register_agent("performance_monitoring", performance_agent)
-            self.logger.info("PerformanceMonitoringAgent initialized and registered")
-            
-            # SEO Optimization Agent
-            seo_agent_config = AgentConfig(
-                name="seo_optimization_agent",
-                description="Agent responsible for SEO optimization",
-                model_name=self.config.model.name,
-                temperature=self.config.model.temperature,
-                max_tokens=self.config.model.max_tokens,
-                top_p=self.config.model.top_p
-            )
-            
-            seo_agent = SEOOptimizationAgent(
-                config=seo_agent_config,
-                system_config=self.config
-            )
-            await seo_agent.initialize()
-            
-            # Register with manager agent
-            manager_agent.register_agent("seo_optimization", seo_agent)
-            self.logger.info("SEOOptimizationAgent initialized and registered")
+            for agent_type, (agent_class, description) in specialized_agents.items():
+                self.logger.info(f"Initializing {agent_type} agent")
+                agent_config = AgentConfig(
+                    name=f"{agent_type}_agent",
+                    description=description,
+                    model_name=self.config.model.name,
+                    temperature=self.config.model.temperature,
+                    max_tokens=self.config.model.max_tokens,
+                    top_p=self.config.model.top_p
+                )
+                
+                agent = agent_class(
+                    config=agent_config,
+                    system_config=self.config
+                )
+                await agent.initialize()
+                
+                # Register with system and manager
+                self.agents[agent_type] = agent
+                manager_agent.register_agent(agent_type, agent)
+                self.logger.info(f"{agent_type} agent initialized and registered")
             
             self.logger.info(
                 "System initialized successfully",
@@ -227,8 +221,39 @@ class AgentXSystem:
     async def cleanup(self):
         """Clean up system resources."""
         try:
+            # Clean up agents
             for agent in self.agents.values():
-                await agent.cleanup()
+                try:
+                    await agent.cleanup()
+                except Exception as e:
+                    self.logger.error("Error during agent cleanup", agent=agent.config.name, error=str(e))
+            
+            # Reset ChromaDB client
+            try:
+                reset_chroma_client()
+                self.logger.info("ChromaDB client reset")
+            except Exception as e:
+                self.logger.error("Error resetting ChromaDB client", error=str(e))
+            
+            # Reset GitHub controller
+            try:
+                if hasattr(self, 'github'):
+                    # First try to stash any changes
+                    subprocess.run(["git", "stash", "save", "Temporary stash before cleanup"], 
+                                 cwd=self.config.workspace.path,
+                                 capture_output=True,
+                                 text=True)
+                    
+                    # Then checkout main branch
+                    subprocess.run(["git", "checkout", "main"],
+                                 cwd=self.config.workspace.path,
+                                 capture_output=True,
+                                 text=True)
+                    
+                    self.logger.info("GitHub controller reset")
+            except Exception as e:
+                self.logger.error("Error resetting GitHub controller", error=str(e))
+            
             self.logger.info("System cleaned up")
         except Exception as e:
             self.logger.error("Error during cleanup", error=str(e))

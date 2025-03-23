@@ -1,56 +1,68 @@
-"""Shared ChromaDB client for AgentX."""
+"""ChromaDB client implementation."""
 
-import os
-from typing import Optional
 import chromadb
 from chromadb.config import Settings
+from pathlib import Path
+import structlog
 
-# Global ChromaDB client instance
-_chroma_client: Optional[chromadb.Client] = None
-_persist_directory: Optional[str] = None
+logger = structlog.get_logger()
+_client = None
 
 def get_chroma_client(persist_directory: str) -> chromadb.Client:
-    """Get or create a ChromaDB client instance.
+    """Get or create a ChromaDB client.
     
     Args:
-        persist_directory: Directory to persist the database
+        persist_directory: Directory to persist ChromaDB data
         
     Returns:
         ChromaDB client instance
     """
-    global _chroma_client, _persist_directory
+    global _client
     
-    # If we already have a client with a different directory, reset it
-    if _chroma_client is not None and _persist_directory != persist_directory:
-        reset_chroma_client()
-    
-    if _chroma_client is None:
-        # Ensure the persist directory exists
-        os.makedirs(persist_directory, exist_ok=True)
-        _persist_directory = persist_directory
+    if _client is None:
+        # Ensure directory exists
+        Path(persist_directory).mkdir(parents=True, exist_ok=True)
         
-        # Create the client with consistent settings
-        _chroma_client = chromadb.PersistentClient(
-            path=persist_directory,
-            settings=Settings(
-                anonymized_telemetry=False,
-                allow_reset=True
-            )
-        )
-    
-    return _chroma_client
-
-def reset_chroma_client():
-    """Reset the ChromaDB client. Use this for testing or when you need to change settings."""
-    global _chroma_client, _persist_directory
-    
-    # If we have an existing client, try to close it
-    if _chroma_client is not None:
         try:
-            _chroma_client._settings.allow_reset = True
-            _chroma_client.reset()
-        except Exception:
-            pass
+            # Create client with persistence
+            _client = chromadb.PersistentClient(
+                path=persist_directory,
+                settings=Settings(
+                    anonymized_telemetry=False,
+                    allow_reset=True,
+                    is_persistent=True
+                )
+            )
+            logger.info("ChromaDB client initialized", persist_directory=persist_directory)
+        except Exception as e:
+            logger.error("Failed to initialize ChromaDB client", error=str(e))
+            raise
     
-    _chroma_client = None
-    _persist_directory = None 
+    return _client
+
+def reset_chroma_client() -> None:
+    """Reset the ChromaDB client."""
+    global _client
+    
+    if _client is not None:
+        try:
+            # Get all collections
+            collections = _client.list_collections()
+            
+            # Delete each collection
+            for collection in collections:
+                try:
+                    _client.delete_collection(collection.name)
+                    logger.info("Deleted collection", name=collection.name)
+                except Exception as e:
+                    logger.error("Failed to delete collection", collection=collection.name, error=str(e))
+            
+            # Reset the client reference
+            _client = None
+            logger.info("ChromaDB client reset")
+            
+        except Exception as e:
+            logger.error("Failed to reset ChromaDB client", error=str(e))
+        finally:
+            # Ensure client is reset even if there's an error
+            _client = None 

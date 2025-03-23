@@ -39,30 +39,83 @@ class GitHubController:
             logger.error("Failed to get current branch", error=str(e))
             raise RuntimeError("Failed to get current branch") from e
 
-    def checkout_branch(self, branch_name: str, create: bool = False) -> bool:
-        """
-        Checkout a Git branch. Optionally create it if it doesn't exist.
-        Returns True if successful, False otherwise.
+    def run_git_command(self, command: List[str], check: bool = True) -> subprocess.CompletedProcess:
+        """Run a git command.
+        
+        Args:
+            command: Git command as list of strings
+            check: Whether to check return code
+            
+        Returns:
+            CompletedProcess instance
         """
         try:
-            if create:
-                # First check if branch exists
-                result = subprocess.run(
-                    ["git", "show-ref", "--verify", f"refs/heads/{branch_name}"],
-                    capture_output=True
-                )
-                
-                if result.returncode == 0:
-                    # Branch exists, just checkout
-                    subprocess.run(["git", "checkout", branch_name], check=True)
-                else:
-                    # Create and checkout new branch
-                    subprocess.run(["git", "checkout", "-b", branch_name], check=True)
-            else:
-                subprocess.run(["git", "checkout", branch_name], check=True)
-            return True
+            full_command = ["git"] + command
+            result = subprocess.run(
+                full_command,
+                cwd=self.workspace_path,
+                check=check,
+                capture_output=True,
+                text=True
+            )
+            return result
         except subprocess.CalledProcessError as e:
-            logger.error("Failed to checkout branch", branch=branch_name, error=str(e))
+            logger.error(
+                "Git command failed",
+                command=command,
+                error=str(e),
+                stdout=e.stdout,
+                stderr=e.stderr
+            )
+            raise
+
+    def stash_changes(self) -> bool:
+        """Stash any local changes.
+        
+        Returns:
+            bool: True if stashing was successful
+        """
+        try:
+            result = self.run_git_command(["stash", "save", "Temporary stash before branch switch"])
+            return result.returncode == 0
+        except Exception as e:
+            logger.error("Failed to stash changes", error=str(e))
+            return False
+
+    def checkout_branch(self, branch_name: str) -> bool:
+        """Checkout a branch, stashing changes if needed.
+        
+        Args:
+            branch_name: Name of branch to checkout
+            
+        Returns:
+            bool: True if checkout was successful
+        """
+        try:
+            # First try to checkout
+            try:
+                self.run_git_command(["checkout", branch_name])
+                logger.info("Checked out branch", branch=branch_name)
+                return True
+            except subprocess.CalledProcessError:
+                # If checkout fails, try stashing first
+                if self.stash_changes():
+                    try:
+                        self.run_git_command(["checkout", branch_name])
+                        logger.info("Checked out branch after stashing", branch=branch_name)
+                        return True
+                    except subprocess.CalledProcessError as e:
+                        logger.error(
+                            "Failed to checkout branch even after stashing",
+                            branch=branch_name,
+                            error=str(e)
+                        )
+                        return False
+                else:
+                    logger.error("Failed to stash changes before checkout", branch=branch_name)
+                    return False
+        except Exception as e:
+            logger.error("Error during branch checkout", branch=branch_name, error=str(e))
             return False
     
     def create_branch(self, branch_name: str, base_branch: str = "main") -> dict:
@@ -77,15 +130,15 @@ class GitHubController:
                     return {"status": "error", "message": f"Failed to checkout {base_branch}"}
             
             # Pull latest changes
-            subprocess.run(["git", "pull", "origin", base_branch], check=True)
+            self.run_git_command(["pull", "origin", base_branch])
             
             # Create and checkout new branch
-            if not self.checkout_branch(branch_name, create=True):
+            if not self.checkout_branch(branch_name):
                 return {"status": "error", "message": f"Failed to create branch {branch_name}"}
             
             # Push the new branch to remote
             try:
-                subprocess.run(["git", "push", "-u", "origin", branch_name], check=True)
+                self.run_git_command(["push", "-u", "origin", branch_name])
             except subprocess.CalledProcessError:
                 # If remote push fails, it's not critical for local development
                 logger.warning("Failed to push branch to remote", branch=branch_name)
@@ -139,13 +192,13 @@ class GitHubController:
             if files:
                 # Add specific files
                 for file in files:
-                    subprocess.run(["git", "add", file], check=True)
+                    self.run_git_command(["add", file])
             else:
                 # Add all changes
-                subprocess.run(["git", "add", "."], check=True)
+                self.run_git_command(["add", "."])
             
             # Commit changes
-            subprocess.run(["git", "commit", "-m", message], check=True)
+            self.run_git_command(["commit", "-m", message])
             return True
         except subprocess.CalledProcessError as e:
             logger.error("Failed to commit changes", error=str(e))
@@ -179,7 +232,7 @@ class GitHubController:
         ]
         
         try:
-            subprocess.run(docker_command, check=True)
+            self.run_git_command(docker_command, check=True)
             return {"status": "success", "runner_name": runner_name}
         except subprocess.CalledProcessError as e:
             return {"status": "error", "message": str(e)}
@@ -188,19 +241,12 @@ class GitHubController:
         """Check if a branch exists locally or remotely."""
         try:
             # Check local branch
-            local_result = subprocess.run(
-                ["git", "show-ref", "--verify", f"refs/heads/{branch_name}"],
-                capture_output=True
-            )
+            local_result = self.run_git_command(["show-ref", "--verify", f"refs/heads/{branch_name}"])
             if local_result.returncode == 0:
                 return True
 
             # Check remote branch
-            remote_result = subprocess.run(
-                ["git", "ls-remote", "--heads", "origin", branch_name],
-                capture_output=True,
-                text=True
-            )
+            remote_result = self.run_git_command(["ls-remote", "--heads", "origin", branch_name])
             return bool(remote_result.stdout.strip())
         except subprocess.CalledProcessError:
             return False
@@ -248,7 +294,7 @@ class GitHubController:
         """Push changes to the current branch."""
         try:
             current = self.get_current_branch()
-            subprocess.run(["git", "push", "origin", current], check=True)
+            self.run_git_command(["push", "origin", current])
             return True
         except subprocess.CalledProcessError as e:
             logger.error("Failed to push changes", error=str(e))

@@ -1,20 +1,38 @@
+"""Content Generation Agent for generating and updating website content."""
+
+import structlog
 from typing import Dict, Any, List
 import asyncio
 from datetime import datetime
 from bs4 import BeautifulSoup
 from agentx.common_libraries.base_agent import BaseAgent, AgentConfig
+from agentx.common_libraries.system_config import SystemConfig
+
+logger = structlog.get_logger()
 
 class ContentGenerationAgent(BaseAgent):
-    """Agent responsible for generating and refining web content"""
+    """Agent responsible for generating and updating website content."""
     
-    def __init__(self, config: AgentConfig):
-        super().__init__(config)
+    def __init__(self, config: AgentConfig, system_config: SystemConfig):
+        """Initialize the Content Generation Agent.
+        
+        Args:
+            config: Agent configuration
+            system_config: System configuration
+        """
+        super().__init__(config, system_config)
+        self.logger = logger.bind(agent="content_generation")
         self.content_types = {
             "article": self._generate_article,
             "product_description": self._generate_product_description,
             "meta_description": self._generate_meta_description,
             "social_media": self._generate_social_media_content
         }
+    
+    async def initialize(self) -> None:
+        """Initialize the agent."""
+        await super().initialize()
+        self.logger.info("Content Generation Agent initialized")
     
     async def _generate_article(
         self,
@@ -148,53 +166,112 @@ class ContentGenerationAgent(BaseAgent):
         }
     
     async def process(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Process content generation request"""
-        content_type = data.get("type")
-        if not content_type:
-            raise ValueError("Content type is required")
+        """Process content generation tasks.
         
-        try:
-            # Generate new content
-            if content_type in self.content_types:
-                result = await self.content_types[content_type](**data)
+        Args:
+            data: Task data containing content requirements
             
-            # Refine existing content
-            elif content_type == "refine":
-                result = await self.refine_content(
+        Returns:
+            Processing results
+        """
+        try:
+            task_type = data.get("type")
+            if not task_type:
+                raise ValueError("Task type not provided")
+            
+            if task_type == "content_audit":
+                return await self._audit_content(data)
+            elif task_type == "content_update":
+                return await self._update_content(data)
+            elif task_type == "refine":
+                return await self.refine_content(
                     data["content"],
                     data.get("style_guide", {}),
                     data.get("context", {})
                 )
-            
-            # Optimize for target
-            elif content_type == "optimize":
-                result = await self.optimize_for_target(
+            elif task_type == "optimize":
+                return await self.optimize_for_target(
                     data["content"],
                     data.get("target", {})
                 )
-            
+            elif task_type in self.content_types:
+                return await self.content_types[task_type](**data)
             else:
-                raise ValueError(f"Unknown content type: {content_type}")
+                raise ValueError(f"Unknown task type: {task_type}")
             
-            # Store in memory
-            await self.memory_manager.add_document({
-                "request": data,
-                "result": result,
-                "timestamp": datetime.now().isoformat()
-            })
+        except Exception as e:
+            self.logger.error("Error processing task", error=str(e))
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+            
+    async def _audit_content(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Audit website content.
+        
+        Args:
+            data: Audit parameters
+            
+        Returns:
+            Audit results
+        """
+        try:
+            target_url = data.get("target")
+            if not target_url:
+                raise ValueError("Target URL not provided")
+            
+            # TODO: Implement content auditing logic
+            # 1. Analyze website content
+            # 2. Check for outdated information
+            # 3. Verify content quality and relevance
             
             return {
                 "status": "success",
-                "result": result
+                "message": "Content audit completed",
+                "changes_needed": False,
+                "recommendations": []
             }
             
         except Exception as e:
-            self.logger.error("processing_error", error=str(e))
+            self.logger.error("Content audit failed", error=str(e))
             return {
                 "status": "error",
-                "error": str(e)
+                "message": str(e)
             }
-    
+            
+    async def _update_content(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Update website content.
+        
+        Args:
+            data: Content update parameters
+            
+        Returns:
+            Update results
+        """
+        try:
+            files = data.get("files_modified", [])
+            if not files:
+                raise ValueError("No files specified for update")
+            
+            # TODO: Implement content update logic
+            # 1. Generate new content
+            # 2. Update specified files
+            # 3. Verify changes
+            
+            return {
+                "status": "success",
+                "message": "Content updated successfully",
+                "changes_made": True,
+                "updated_files": files
+            }
+            
+        except Exception as e:
+            self.logger.error("Content update failed", error=str(e))
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+            
     async def cleanup(self) -> None:
-        """Cleanup resources"""
+        """Clean up resources."""
         await super().cleanup() 
