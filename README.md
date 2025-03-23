@@ -17,8 +17,8 @@ Site Sentry is a powerful framework for autonomous website maintenance, featurin
 
 ### Pre-requisities (external APIs)
 > These APIs aren't paid, all shown in demo here are free of use, and needed for use throughout, so easier to get them in advance:
-- Github:  Personal Access Token
-- Google: Gemini API
+- [Github:  Personal Access Token](https://github.com/settings/tokens)
+- [Google: Gemini API](https://ai.google.dev/gemini-api/docs/api-key)
 
 
 <br /> <br />
@@ -28,16 +28,37 @@ Site Sentry is a powerful framework for autonomous website maintenance, featurin
 ### A. As a framework / tool - local:
 > Setup locally using a python tool, comes with CLI + config 
 
-
+**1. First install the package:**
 ```bash
-pip install git+asdhs.com
+pip install git+https://github.com/rajatbalyan/agentx-2025.git@feat/sentry-package
 ```
+
+This comes with the "sentry" cli tool, test by running:
+```bash
+sentry
+```
+
+**2. Initialise sentry by creating a config**
+```bash
+sentry init
+```
+
+Some input will be needed as shown:
+![sentry-inputs](https://github.com/user-attachments/assets/d7216fe8-128d-4993-be5a-101d4742cab0)
+
+
+Then, analyse & make changes with:
+```bash
+sentry run
+```
+
+A new branch will be created with changes from the tool.
 
 .
 <br />
 
 ### B. As a service - cloud:
-> Use our provided web interface to host background tasks, via cron or CI/CD
+> Use [our provided web interface](https://sitesentry.metacatalyst.in/) to host background tasks, via cron or CI/CD
 
 <be />
 
