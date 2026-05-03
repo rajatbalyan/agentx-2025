@@ -27,6 +27,7 @@ wheels/
 
 # Virtual Environment
 agentx-env/
+sitesentry/
 venv/
 env/
 ENV/
