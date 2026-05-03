@@ -1,44 +1,37 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="sentry",
-    version="0.1.0",
+    name="site-sentry",
+    version="1.0.0",
+    description="Autonomous website maintenance agent — Lighthouse audit → LLM fixes → GitHub PR",
+    author="Rajat Balyan",
     packages=find_packages(),
-    install_requires=[
-        "click>=8.0.0",
-        "pyyaml>=6.0.0",
-        "pydantic>=2.0.0",
-        "structlog>=24.1.0",
-        "aiohttp>=3.9.0",
-        "beautifulsoup4>=4.12.0",
-        "pytest>=8.0.0",
-        "pytest-asyncio>=0.23.0",
-        "rich>=13.7.0",
-        "psutil>=6.0.0",
-        "uvicorn>=0.25.0",
-        "python-dotenv>=1.0.0",
-        "pydantic>=2.0.0",
-        "langchain-google-genai>=0.2.0",
-        "networkx>=3.0.0",
-        "langchain>=0.2.0",
-        "langgraph>=0.2.0",
-        "fastapi>=0.70.0",
-        "httpx>=0.24.0",
-        "chromadb>=0.4.0",
-        "sqlalchemy>=2.0.0",
-        "google-generativeai>=0.3.0",
-        "google-cloud-aiplatform>=1.35.0",
-        "PyGithub>=2.1.0",
-        "pytest>=7.0.0",
-        "pytest-asyncio>=0.21.0",
-        "black>=23.0.0",
-        "isort>=5.12.0",
-        "mypy>=1.0.0"
-    ],
     python_requires=">=3.10",
     entry_points={
         "console_scripts": [
-            "sentry=agentx.cli_main:cli"
-        ]
-    }
+            "sentry=site_sentry.cli.commands:cli",
+        ],
+    },
+    install_requires=[
+        "click>=8.1.0",
+        "pyyaml>=6.0.0",
+        "pydantic>=2.5.0",
+        "structlog>=24.1.0",
+        "python-dotenv>=1.0.0",
+        "langchain>=0.3.0",
+        "langchain-core>=0.3.0",
+        "langchain-openai>=0.2.0",
+        "langgraph>=0.2.0",
+        "openai>=1.30.0",
+        "beautifulsoup4>=4.12.0",
+        "requests>=2.31.0",
+        "aiohttp>=3.9.0",
+        "gitpython>=3.1.40",
+        "chromadb>=0.5.0",
+    ],
+    extras_require={
+        "google": ["langchain-google-genai>=2.0.0"],
+        "groq": ["langchain-groq>=0.2.0"],
+        "dev": ["pytest>=8.0.0", "pytest-asyncio>=0.23.0"],
+    },
 )

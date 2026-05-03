@@ -1,0 +1,50 @@
+# Site-Sentry Configuration
+# Run 'sentry init' to generate this file for your project
+
+# Required: URL of the live website to audit
+website_url: "https://your-website.com"
+
+# Path to the local repo/workspace to fix (default: current directory)
+workspace_path: "."
+
+# How often to re-run in seconds when using scheduled/daemon mode (default: 1hr)
+scan_interval: 3600
+
+# LLM Configuration (NVIDIA NIM free tier by default)
+llm:
+  provider: "nvidia_nim"
+  manager_model: "deepseek-ai/deepseek-v3-2"    # Used by ManagerAgent (planning)
+  agent_model: "deepseek-ai/deepseek-v4-flash"  # Used by specialized agents (code edits)
+  temperature: 0.3
+  max_tokens: 4096
+  base_url: "https://integrate.api.nvidia.com/v1"
+
+# Memory (ChromaDB)
+memory:
+  vector_store_path: "data/memory/vectors"
+  enabled: true
+
+# GitHub Integration
+github:
+  repo_owner: ""    # e.g. "johndoe"
+  repo_name: ""     # e.g. "my-website"
+  base_branch: "main"
+  auto_merge: false
+  pr_labels:
+    - "site-sentry"
+    - "automated"
+  branch_prefix: "sentry/fix"
+
+# Which agents to run
+agents:
+  seo: true
+  performance: true
+  error_fixing: true
+  content_update: false     # More aggressive — enable when ready
+  content_generation: false # Generates new content — enable when ready
+
+# Logging
+logging:
+  level: "INFO"
+  file: "logs/sentry.log"
+  format: "text"

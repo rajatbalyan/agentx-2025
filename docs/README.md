@@ -1,64 +1,23 @@
-# AgentX Documentation
+# Site-Sentry documentation
 
-Welcome to the AgentX documentation! This documentation will help you understand, set up, and use the AgentX framework for autonomous website maintenance.
+Site-Sentry is a Python CLI that **audits a live site with Lighthouse**, **plans fixes** with a LangGraph manager, runs **specialized agents** (SEO, performance, errors, optional content), and **opens a GitHub pull request** when configured.
 
-## Table of Contents
+## Documentation index
 
-1. [Getting Started](getting-started.md)
-   - Installation
-   - Quick Start
-   - Configuration
+| Document | Description |
+|----------|-------------|
+| [Getting started](getting-started.md) | Install, `sentry init`, first run, prerequisites |
+| [Configuration](configuration.md) | `sentry.config.yaml`, environment variables, `SentryConfig` |
+| [CLI reference](cli.md) | `sentry` commands and flags |
+| [Architecture](architecture.md) | Pipeline, agents, memory, GitHub integration |
+| [Python modules](api-reference.md) | Package layout and important entry points |
+| [Deployment](deployment.md) | Docker image and Compose service |
+| [Troubleshooting](troubleshooting.md) | Common failures and checks |
 
-2. [Architecture](architecture.md)
-   - System Overview
-   - Agent Types
-   - Memory Management
-   - Communication Flow
+## Repository
 
-3. [API Reference](api-reference.md)
-   - Base Agent
-   - Specialized Agents
-   - Memory Manager
-   - System Configuration
-
-4. [Development Guide](development.md)
-   - Setting Up Development Environment
-   - Adding New Agents
-   - Testing
-   - Debugging
-
-5. [Deployment Guide](deployment.md)
-   - Docker Deployment
-   - Kubernetes Deployment
-   - Monitoring and Logging
-   - Scaling
-
-6. [Contributing](contributing.md)
-   - Code Style
-   - Pull Request Process
-   - Testing Guidelines
-   - Documentation
-
-7. [Troubleshooting](troubleshooting.md)
-   - Common Issues
-   - Error Messages
-   - Performance Optimization
-   - Security Considerations
-
-## Quick Links
-
-- [GitHub Repository](https://github.com/yourusername/agentx)
-- [Issue Tracker](https://github.com/yourusername/agentx/issues)
-- [Release Notes](https://github.com/yourusername/agentx/releases)
-
-## Support
-
-If you need help or have questions:
-
-1. Check the [Troubleshooting Guide](troubleshooting.md)
-2. Search [existing issues](https://github.com/yourusername/agentx/issues)
-3. Create a new issue if needed
+- [GitHub: rajatbalyan/agentx-2025](https://github.com/rajatbalyan/agentx-2025) (repository name; the Python package is **`site_sentry`**, CLI command **`sentry`**)
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](../LICENSE) file for details. 
+See [LICENSE](../LICENSE) in the repository root.

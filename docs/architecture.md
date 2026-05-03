@@ -1,224 +1,55 @@
-# AgentX Architecture
+# Architecture
 
-This document provides a detailed overview of the AgentX architecture, including its components, communication flow, and design principles.
+## End-to-end flow
 
-## System Overview
+```text
+sentry run
+    │
+    ▼
+SentryPipeline.run()
+    │
+    ├─► ReadAgent.process()
+    │       Lighthouse CLI (JSON) → scores, issues, tasks, summary
+    │       optional Chroma store (AgentMemory)
+    │
+    ├─► ManagerAgent.process(read_result)
+    │       LangGraph: plan → fetch_files? → run_agents → collect
+    │       plan: map ReadAgent tasks to enabled specialized agents
+    │       fetch_files: GitHub REST read paths for active agents (if GitHub configured)
+    │       run_agents: sequential agent.process() + rate-limit sleep between agents
+    │       collect: merge file changes by path
+    │
+    └─► GitHubController (if token + repo + not dry-run)
+            create_branch → commit_files → create_pull_request
+```
 
-AgentX is built on a multi-agent architecture where specialized agents work together to maintain and optimize websites. The system uses LangGraph for agent orchestration and LangMem for persistent memory management.
+## Python packages
 
-### Core Components
+| Path | Responsibility |
+|------|----------------|
+| `site_sentry/config/schema.py` | `SentryConfig` and nested models (single source of truth) |
+| `site_sentry/core/llm_provider.py` | `get_llm(role, config)` → LangChain chat model |
+| `site_sentry/core/base_agent.py` | Abstract `BaseAgent` with LLM + `AgentMemory` |
+| `site_sentry/core/memory.py` | `AgentMemory` (Chroma optional, failures are non-fatal) |
+| `site_sentry/auditor/lighthouse.py` | `run_audit(url)`, `LighthouseError`, `_normalize` for tests |
+| `site_sentry/agents/read_agent.py` | Lighthouse orchestration and task list for the manager |
+| `site_sentry/agents/manager_agent.py` | LangGraph orchestration of five specialized agents |
+| `site_sentry/agents/*_agent.py` | Specialized agents (stubs return empty `changes` until implemented) |
+| `site_sentry/github/controller.py` | GitHub REST v3: refs, contents, pulls, labels |
+| `site_sentry/pipeline.py` | `SentryPipeline` wiring Read → Manager → GitHub |
+| `site_sentry/cli/commands.py` | Click CLI: `init`, `run`, `status` |
 
-1. **Manager Agent**
-   - Orchestrates the workflow
-   - Delegates tasks to specialized agents
-   - Handles error recovery and retries
-   - Manages agent communication
+## LangGraph manager
 
-2. **READ Agent**
-   - Fetches website content
-   - Normalizes data for processing
-   - Integrates with audit tools
-   - Generates specialized prompts
+- **State** (`PipelineState`): URL, scores, issues, tasks, `active_agents`, `file_contents`, `agent_results` (with reducer), `all_changes`, optional error/branch metadata.
+- **Conditional edge** after `plan`: if there are no `active_agents`, skip fetch/run and go straight to `collect`.
+- **Rate limiting**: `asyncio.sleep(1.5)` between consecutive specialized agent runs (approximate 40 RPM safety margin for LLM calls).
 
-3. **Specialized Agents**
-   - Content Update Agent
-   - SEO Optimization Agent
-   - Error Fixing Agent
-   - Content Generation Agent
-   - Performance Monitoring Agent
+## GitHub integration
 
-4. **CI/CD Deployment Agent**
-   - Manages GitHub integration
-   - Handles branch creation and merging
-   - Runs automated tests
-   - Deploys changes
+`GitHubController` expects:
 
-## Agent Types
+- Bearer token (`GITHUB_TOKEN`)
+- `repo_owner` and `repo_name` in config
 
-### Base Agent
-
-All agents inherit from the `BaseAgent` class, which provides:
-- Common initialization
-- Logging capabilities
-- Memory management
-- Error handling
-- Metrics collection
-
-### Specialized Agents
-
-Each specialized agent focuses on a specific task:
-
-1. **Content Update Agent**
-   - Detects outdated content
-   - Updates via external APIs
-   - Maintains content freshness
-   - Tracks update history
-
-2. **SEO Optimization Agent**
-   - Analyzes meta tags
-   - Optimizes content structure
-   - Improves keyword usage
-   - Enhances readability
-
-3. **Error Fixing Agent**
-   - Detects HTML errors
-   - Fixes accessibility issues
-   - Validates content
-   - Maintains code quality
-
-4. **Content Generation Agent**
-   - Creates new content
-   - Refines existing content
-   - Ensures consistency
-   - Maintains brand voice
-
-5. **Performance Monitoring Agent**
-   - Tracks metrics
-   - Identifies bottlenecks
-   - Suggests optimizations
-   - Monitors uptime
-
-## Memory Management
-
-### LangMem Integration
-
-The system uses LangMem for persistent memory management:
-
-1. **Vector Memory**
-   - Stores embeddings for semantic search
-   - Enables similar interaction finding
-   - Maintains context awareness
-
-2. **Conversation Memory**
-   - Stores agent interactions
-   - Maintains conversation history
-   - Enables context retrieval
-
-### Memory Types
-
-1. **Short-term Memory**
-   - Recent interactions
-   - Current task context
-   - Temporary data
-
-2. **Long-term Memory**
-   - Historical data
-   - Learned patterns
-   - Best practices
-
-## Communication Flow
-
-### Agent-to-Agent Communication
-
-1. **Task Delegation**
-   ```
-   Manager Agent
-   ├─ READ Agent
-   │  └─ Specialized Agents
-   └─ CI/CD Agent
-   ```
-
-2. **Data Flow**
-   ```
-   Website Data
-   ├─ READ Agent (Normalization)
-   ├─ Manager Agent (Analysis)
-   ├─ Specialized Agents (Processing)
-   └─ CI/CD Agent (Deployment)
-   ```
-
-3. **Error Handling**
-   ```
-   Error Detection
-   ├─ Agent-level Recovery
-   ├─ Manager-level Retry
-   └─ System-level Fallback
-   ```
-
-## Design Principles
-
-1. **Modularity**
-   - Independent agent components
-   - Pluggable architecture
-   - Easy extension
-
-2. **Scalability**
-   - Horizontal scaling
-   - Load balancing
-   - Resource optimization
-
-3. **Reliability**
-   - Error recovery
-   - State persistence
-   - Transaction management
-
-4. **Security**
-   - API key management
-   - Access control
-   - Data encryption
-
-## Monitoring and Metrics
-
-### Prometheus Integration
-
-1. **System Metrics**
-   - Agent health
-   - Resource usage
-   - Response times
-
-2. **Business Metrics**
-   - Task completion
-   - Error rates
-   - Performance scores
-
-### Grafana Dashboards
-
-1. **System Overview**
-   - Agent status
-   - Resource usage
-   - Error rates
-
-2. **Performance Metrics**
-   - Response times
-   - Throughput
-   - Resource utilization
-
-## Deployment Architecture
-
-### Docker Setup
-
-1. **Services**
-   - Agent containers
-   - Redis
-   - Prometheus
-   - Grafana
-
-2. **Networking**
-   - Internal network
-   - Port mapping
-   - Service discovery
-
-### Kubernetes Deployment
-
-1. **Resources**
-   - Deployments
-   - Services
-   - ConfigMaps
-   - Secrets
-
-2. **Scaling**
-   - Horizontal scaling
-   - Resource limits
-   - Auto-scaling
-
-## Future Considerations
-
-1. **Planned Improvements**
-   - Enhanced memory management
-   - Advanced error recovery
-   - Improved monitoring
-
-2. **Potential Extensions**
-   - New agent types
-   - Additional integrations
-   - Enhanced analytics 
+File paths for the Contents API are URL-encoded per segment. PR labels are best-effort (failures are logged, not fatal).
