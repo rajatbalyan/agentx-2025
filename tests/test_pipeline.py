@@ -104,3 +104,47 @@ class TestPipelineInit:
                 mock_llm.return_value = MagicMock()
                 pipeline = SentryPipeline(config)
                 assert pipeline.github is None  # No credentials configured
+
+
+class TestAccessibilityAgent:
+    def test_accessibility_agent_no_issues(self, tmp_path):
+        """Agent returns empty changes when no issues are passed."""
+        import asyncio
+
+        from site_sentry.agents.accessibility_agent import AccessibilityAgent
+        from site_sentry.config.schema import SentryConfig
+
+        config_path = make_test_config(tmp_path)
+        with patch.dict(os.environ, {"NVIDIA_API_KEY": "nvapi-test"}):
+            config = SentryConfig.load(str(config_path))
+            with patch("site_sentry.core.llm_provider.get_llm") as mock_llm:
+                mock_llm.return_value = MagicMock()
+                agent = AccessibilityAgent(config)
+                result = asyncio.run(
+                    agent.process({"issues": [], "url": "https://example.com"})
+                )
+                assert result["status"] == "success"
+                assert result["changes"] == []
+
+    def test_accessibility_agent_in_agents_init(self):
+        """AccessibilityAgent is exported from the agents package."""
+        from site_sentry.agents import AccessibilityAgent
+
+        assert AccessibilityAgent is not None
+
+    def test_accessibility_toggle_in_config(self, tmp_path):
+        """accessibility toggle exists in AgentToggleConfig and defaults to True."""
+        from site_sentry.config.schema import AgentToggleConfig
+
+        toggle = AgentToggleConfig()
+        assert hasattr(toggle, "accessibility")
+        assert toggle.accessibility is True
+
+    def test_accessibility_wired_in_manager(self):
+        """AccessibilityAgent is registered in ManagerAgent.agents dict."""
+        import inspect
+
+        from site_sentry.agents.manager_agent import ManagerAgent
+
+        src = inspect.getsource(ManagerAgent.__init__)
+        assert '"accessibility"' in src or "'accessibility'" in src

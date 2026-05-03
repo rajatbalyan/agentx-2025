@@ -90,7 +90,7 @@ class ReadAgent(BaseAgent):
         task_map = [
             ("performance", "performance_optimization", "performance"),
             ("seo", "seo_optimization", "seo"),
-            ("accessibility", "accessibility_fix", "best_practices"),
+            ("accessibility", "accessibility_fix", "accessibility"),
             ("best_practices", "error_fixing", "best_practices"),
         ]
 

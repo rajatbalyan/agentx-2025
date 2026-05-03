@@ -61,8 +61,8 @@ def _get_nvidia_nim(model_name: str, config, api_key: str) -> BaseChatModel:
 
     return ChatOpenAI(
         model=model_name,
-        openai_api_key=api_key,
-        openai_api_base=config.llm.base_url,
+        api_key=api_key,
+        base_url=config.llm.base_url,
         temperature=config.llm.temperature,
         max_tokens=config.llm.max_tokens,
         # NIM-specific: respect rate limits with retries
@@ -110,7 +110,7 @@ def _get_openai(model_name: str, config, api_key: str) -> BaseChatModel:
 
     return ChatOpenAI(
         model=model_name or "gpt-4o-mini",
-        openai_api_key=api_key,
+        api_key=api_key,
         temperature=config.llm.temperature,
         max_tokens=config.llm.max_tokens,
     )

@@ -1,7 +1,7 @@
 # site_sentry/agents/manager_agent.py
 """
 ManagerAgent — LangGraph-based orchestrator for all specialized agents.
-Properly uses add_conditional_edges() and wires all 5 specialized agents.
+Properly uses add_conditional_edges() and wires six specialized agents.
 """
 from __future__ import annotations
 import asyncio
@@ -17,6 +17,7 @@ from site_sentry.agents.performance_agent import PerformanceAgent
 from site_sentry.agents.error_fixing_agent import ErrorFixingAgent
 from site_sentry.agents.content_update_agent import ContentUpdateAgent
 from site_sentry.agents.content_generation_agent import ContentGenerationAgent
+from site_sentry.agents.accessibility_agent import AccessibilityAgent
 from site_sentry.github.controller import GitHubController
 
 logger = structlog.get_logger()
@@ -67,7 +68,7 @@ class ManagerAgent:
         "seo_optimization": "seo",
         "performance_optimization": "performance",
         "error_fixing": "error_fixing",
-        "accessibility_fix": "error_fixing",  # handled by error agent
+        "accessibility_fix": "accessibility",  # now its own dedicated agent
         "content_update": "content_update",
         "content_generation": "content_generation",
     }
@@ -101,6 +102,19 @@ class ManagerAgent:
             "src/App.jsx",
             "src/App.tsx",
         ],
+        "accessibility": [
+            "index.html",
+            "public/index.html",
+            "src/index.html",
+            "src/App.jsx",
+            "src/App.tsx",
+            "src/components/Nav.jsx",
+            "src/components/Nav.tsx",
+            "src/components/Header.jsx",
+            "src/components/Header.tsx",
+            "src/components/Footer.jsx",
+            "src/components/Footer.tsx",
+        ],
         "content_update": [
             "index.html",
             "src/App.jsx",
@@ -131,6 +145,7 @@ class ManagerAgent:
             "seo": SEOAgent(config),
             "performance": PerformanceAgent(config),
             "error_fixing": ErrorFixingAgent(config),
+            "accessibility": AccessibilityAgent(config),
             "content_update": ContentUpdateAgent(config),
             "content_generation": ContentGenerationAgent(config),
         }
@@ -180,6 +195,7 @@ class ManagerAgent:
                 "seo": agent_config.seo,
                 "performance": agent_config.performance,
                 "error_fixing": agent_config.error_fixing,
+                "accessibility": agent_config.accessibility,
                 "content_update": agent_config.content_update,
                 "content_generation": agent_config.content_generation,
             }
@@ -250,8 +266,12 @@ class ManagerAgent:
             },
             "error_fixing": {
                 "url": url,
-                "issues": issues.get("best_practices", [])
-                + issues.get("accessibility", []),
+                "issues": issues.get("best_practices", []),
+                "file_contents": file_contents,
+            },
+            "accessibility": {
+                "url": url,
+                "issues": issues.get("accessibility", []),
                 "file_contents": file_contents,
             },
             "content_update": {

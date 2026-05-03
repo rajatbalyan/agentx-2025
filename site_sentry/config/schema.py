@@ -41,8 +41,9 @@ class AgentToggleConfig(BaseModel):
     seo: bool = True
     performance: bool = True
     error_fixing: bool = True
-    content_update: bool = False   # off by default — more aggressive
-    content_generation: bool = False  # off by default
+    accessibility: bool = True  # WCAG 2.2 AA fixes — on by default
+    content_update: bool = False  # Conservative copy updates
+    content_generation: bool = False  # New content generation
 
 
 class LoggingConfig(BaseModel):

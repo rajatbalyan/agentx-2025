@@ -37,11 +37,12 @@ github:
 
 # Which agents to run
 agents:
-  seo: true
-  performance: true
-  error_fixing: true
-  content_update: false     # More aggressive — enable when ready
-  content_generation: false # Generates new content — enable when ready
+  seo: true           # Fix meta tags, structured data, canonical links
+  performance: true   # Fix Core Web Vitals, lazy loading, render-blocking
+  error_fixing: true  # Fix HTML errors, deprecated APIs, best practices
+  accessibility: true # Fix WCAG 2.2 AA violations (ARIA, alt text, heading hierarchy)
+  content_update: false     # Conservative copy updates — enable when ready
+  content_generation: false # Generate missing metadata/alt text — enable when ready
 
 # Logging
 logging:

@@ -95,7 +95,7 @@ def init(url: str, workspace: str, github_owner: str, github_repo: str):
         )
         click.echo("Created .env template")
 
-        click.echo(click.style("\n[OK] Site-Sentry initialized!", fg="green"))
+    click.echo(click.style("\n[OK] Site-Sentry initialized!", fg="green"))
     click.echo(f"   Config:    {config_path}")
     click.echo(f"   Target:    {url}")
     click.echo("")
