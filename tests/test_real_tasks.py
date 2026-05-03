@@ -5,7 +5,7 @@ import asyncio
 from agentx.agents.specialized_agent import SpecializedAgent
 import os
 
-WORKSPACE_PATH = "d:/Programming/Projects/landing-page"
+WORKSPACE_PATH = "D:\\Programming\\Projects\\landing-page"
 
 @pytest.fixture
 def web_agent():

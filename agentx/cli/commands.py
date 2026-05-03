@@ -39,17 +39,20 @@ def init(workspace: Optional[str]):
             if not click.confirm("Configuration file already exists. Overwrite?"):
                 return
         
-        # Load template
-        with open(template_path, 'r') as f:
-            config_data = yaml.safe_load(f)
+        # Instead of loading and dumping YAML, directly copy the template
+        # and then update only the workspace path
+        shutil.copy2(template_path, config_path)
         
-        # Set workspace path
-        workspace_path = workspace or os.getcwd()
-        config_data['workspace']['path'] = workspace_path
-        
-        # Write configuration
-        with open(config_path, 'w') as f:
-            yaml.dump(config_data, f, default_flow_style=False)
+        # Update workspace path if provided
+        if workspace:
+            with open(config_path, 'r') as f:
+                config_data = yaml.safe_load(f)
+            
+            config_data['workspace']['path'] = workspace
+            
+            # Write back with sort_keys=False to preserve order
+            with open(config_path, 'w') as f:
+                yaml.dump(config_data, f, default_flow_style=False, sort_keys=False)
             
         click.echo(f"Created configuration file at {config_path}")
         
@@ -88,15 +91,117 @@ def run(dry_run: bool):
             return
         
         # Initialize system
+        click.echo("Initializing AgentX system...")
         system = AgentXSystem(str(config_path))
         
-        # Run pipeline
-        if dry_run:
-            click.echo("Dry run mode - previewing changes...")
-            # TODO: Implement dry run functionality
-        else:
-            click.echo("Starting AgentX pipeline...")
-            # TODO: Implement actual pipeline execution
+        async def run_pipeline():
+            """Run the complete AgentX pipeline."""
+            try:
+                # Initialize the system
+                await system.initialize()
+                click.echo("✅ System initialized successfully")
+
+                # Define the pipeline tasks
+                pipeline_tasks = [
+                    {
+                        "task_type": "read",
+                        "data": {
+                            "url": system.config.website_url,
+                            "scan_type": "full",
+                            "description": "Initial website scan"
+                        }
+                    },
+                    {
+                        "task_type": "performance_monitoring",
+                        "data": {
+                            "type": "performance_audit",
+                            "target": system.config.website_url
+                        }
+                    },
+                    {
+                        "task_type": "seo_optimization",
+                        "data": {
+                            "type": "seo_audit",
+                            "target": system.config.website_url
+                        }
+                    },
+                    {
+                        "task_type": "content_generation",
+                        "data": {
+                            "type": "content_audit",
+                            "target": system.config.website_url
+                        }
+                    },
+                    {
+                        "task_type": "error_fixing",
+                        "data": {
+                            "type": "error_audit",
+                            "target": system.config.website_url
+                        }
+                    }
+                ]
+
+                if dry_run:
+                    click.echo("\n🔍 Dry run mode - previewing changes...")
+                    for task in pipeline_tasks:
+                        click.echo(f"\nWould process task: {task['task_type']}")
+                        click.echo(f"With data: {task['data']}")
+                    click.echo("\n✨ Dry run completed - no changes were made")
+                    return
+
+                # Execute pipeline tasks
+                click.echo("\n🚀 Starting pipeline execution...")
+                
+                # First run the read task to analyze the website
+                read_task = pipeline_tasks[0]
+                click.echo(f"\n📖 Running initial website analysis...")
+                read_result = await system.process_task(read_task["task_type"], read_task["data"])
+                if read_result["status"] != "success":
+                    raise Exception(f"Read task failed: {read_result.get('message', 'Unknown error')}")
+                click.echo("✅ Website analysis completed")
+
+                # Process specialized agent tasks
+                for task in pipeline_tasks[1:]:
+                    click.echo(f"\n🔄 Processing {task['task_type']}...")
+                    result = await system.process_task(task["task_type"], task["data"])
+                    
+                    if result["status"] != "success":
+                        click.echo(f"⚠️  Task {task['task_type']} failed: {result.get('message', 'Unknown error')}")
+                        continue
+                        
+                    click.echo(f"✅ {task['task_type']} completed successfully")
+
+                    # Notify CI/CD agent of task completion
+                    cicd_result = await system.process_task("cicd_deployment", {
+                        "task_type": task["task_type"]
+                    })
+                    click.echo(f"📬 CI/CD agent notified for {task['task_type']}")
+
+                click.echo("\n🔍 CI/CD agent is now:")
+                click.echo("1. Running old version (main branch) on port 3000")
+                click.echo("2. Running new version (sitesentry branch) on port 3001")
+                click.echo("3. Running auditor tool on both versions")
+                click.echo("4. Comparing results and either:")
+                click.echo("   - Creating a pull request if improvements are verified")
+                click.echo("   - Notifying manager agent if further improvements needed")
+
+                # Wait for deployment checks to complete
+                click.echo("\n⏳ Waiting for deployment checks to complete...")
+                await asyncio.sleep(5)  # Give time for deployment checks
+
+                click.echo("\n✨ Pipeline execution completed!")
+                
+            except Exception as e:
+                logger.error("pipeline_error", error=str(e))
+                click.echo(f"\n❌ Pipeline execution failed: {str(e)}", err=True)
+                raise
+            finally:
+                # Cleanup
+                await system.cleanup()
+                click.echo("\n🧹 System cleanup completed")
+
+        # Run the pipeline
+        asyncio.run(run_pipeline())
             
     except Exception as e:
         logger.error("run_error", error=str(e))

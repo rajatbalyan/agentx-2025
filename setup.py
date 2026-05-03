@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="agentx",
+    name="sentry",
     version="0.1.0",
     packages=find_packages(),
     install_requires=[
@@ -12,7 +12,33 @@ setup(
         "aiohttp>=3.9.0",
         "beautifulsoup4>=4.12.0",
         "pytest>=8.0.0",
-        "pytest-asyncio>=0.23.0"
+        "pytest-asyncio>=0.23.0",
+        "rich>=13.7.0",
+        "psutil>=6.0.0",
+        "uvicorn>=0.25.0",
+        "python-dotenv>=1.0.0",
+        "pydantic>=2.0.0",
+        "langchain-google-genai>=0.2.0",
+        "networkx>=3.0.0",
+        "langchain>=0.2.0",
+        "langgraph>=0.2.0",
+        "fastapi>=0.70.0",
+        "httpx>=0.24.0",
+        "chromadb>=0.4.0",
+        "sqlalchemy>=2.0.0",
+        "google-generativeai>=0.3.0",
+        "google-cloud-aiplatform>=1.35.0",
+        "PyGithub>=2.1.0",
+        "pytest>=7.0.0",
+        "pytest-asyncio>=0.21.0",
+        "black>=23.0.0",
+        "isort>=5.12.0",
+        "mypy>=1.0.0"
     ],
     python_requires=">=3.10",
+    entry_points={
+        "console_scripts": [
+            "sentry=agentx.cli_main:cli"
+        ]
+    }
 )

@@ -1,248 +1,117 @@
-from typing import Dict, Any, List
-import asyncio
-from datetime import datetime
+"""CI/CD Deployment Agent for managing deployments and quality checks."""
+
 import os
-from github import Github
+import asyncio
+import subprocess
+import platform
+import signal
+import psutil
+from typing import Dict, Any, List
+import structlog
 from agentx.common_libraries.base_agent import BaseAgent, AgentConfig
+from agentx.common_libraries.system_config import SystemConfig
+from agentx.github_controller.controller import GitHubController
+
+logger = structlog.get_logger()
 
 class CICDDeploymentAgent(BaseAgent):
-    """Agent responsible for CI/CD and deployment processes"""
+    """Agent responsible for CI/CD deployment and quality checks."""
     
-    def __init__(self, config: AgentConfig):
-        super().__init__(config)
-        self.github = Github(os.getenv("GITHUB_TOKEN"))
-        self.repo = self.github.get_repo(os.getenv("GITHUB_REPO"))
-        self.test_branch_prefix = "test-"
-        self.main_branch = "main"
-    
-    async def create_test_branch(
-        self,
-        changes: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Create a test branch for proposed changes"""
+    def __init__(self, config: AgentConfig, system_config: SystemConfig):
+        """Initialize the CI/CD Deployment Agent.
+        
+        Args:
+            config: Agent configuration
+            system_config: System configuration
+        """
+        super().__init__(config, system_config)
+        self.logger = logger.bind(agent="cicd_deployment")
+        self.github = GitHubController(
+            token=system_config.api_keys.get('github_token', ''),
+            repo_owner=system_config.github.repo_owner,
+            repo_name=system_config.github.repo_name,
+            workspace_path=system_config.workspace.path
+        )
+        
+    async def process(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Process deployment tasks.
+        
+        Args:
+            data: Task data containing changes to push
+            
+        Returns:
+            Processing results
+        """
         try:
-            # Generate branch name
-            timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-            branch_name = f"{self.test_branch_prefix}{timestamp}"
-            
-            # Get main branch reference
-            main_ref = self.repo.get_git_ref(f"heads/{self.main_branch}")
-            
-            # Create new branch
-            self.repo.create_git_ref(
-                ref=f"refs/heads/{branch_name}",
-                sha=main_ref.object.sha
-            )
-            
-            # Create commits for changes
-            for file_path, content in changes.items():
-                try:
-                    # Get current file if exists
-                    try:
-                        current_file = self.repo.get_contents(
-                            file_path,
-                            ref=branch_name
-                        )
-                        # Update file
-                        self.repo.update_file(
-                            file_path,
-                            f"Update {file_path}",
-                            content,
-                            current_file.sha,
-                            branch=branch_name
-                        )
-                    except:
-                        # Create new file
-                        self.repo.create_file(
-                            file_path,
-                            f"Create {file_path}",
-                            content,
-                            branch=branch_name
-                        )
-                except Exception as e:
-                    self.logger.error("file_update_error", file=file_path, error=str(e))
-            
-            return {
-                "status": "success",
-                "branch_name": branch_name
-            }
-            
-        except Exception as e:
-            self.logger.error("branch_creation_error", error=str(e))
-            return {
-                "status": "error",
-                "error": str(e)
-            }
-    
-    async def run_tests(
-        self,
-        branch_name: str
-    ) -> Dict[str, Any]:
-        """Run tests on the test branch"""
-        try:
-            # Get test workflow
-            workflow = self.repo.get_workflow("test.yml")
-            
-            # Trigger workflow
-            run = workflow.create_dispatch(
-                branch_name,
-                inputs={"environment": "test"}
-            )
-            
-            # Wait for workflow completion
-            while True:
-                run = self.repo.get_workflow_run(run.id)
-                if run.status == "completed":
-                    break
-                await asyncio.sleep(10)
-            
-            return {
-                "status": "success" if run.conclusion == "success" else "failed",
-                "details": {
-                    "run_id": run.id,
-                    "conclusion": run.conclusion,
-                    "url": run.html_url
-                }
-            }
-            
-        except Exception as e:
-            self.logger.error("test_error", error=str(e))
-            return {
-                "status": "error",
-                "error": str(e)
-            }
-    
-    async def create_pull_request(
-        self,
-        branch_name: str,
-        changes: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Create pull request for the changes"""
-        try:
-            # Generate PR title and body
-            title = f"Updates from {branch_name}"
-            body = "Automated updates from AgentX\n\nChanges:\n"
-            for file_path in changes.keys():
-                body += f"- Modified {file_path}\n"
-            
-            # Create pull request
-            pr = self.repo.create_pull(
-                title=title,
-                body=body,
-                base=self.main_branch,
-                head=branch_name
-            )
-            
-            return {
-                "status": "success",
-                "pr_number": pr.number,
-                "pr_url": pr.html_url
-            }
-            
-        except Exception as e:
-            self.logger.error("pr_creation_error", error=str(e))
-            return {
-                "status": "error",
-                "error": str(e)
-            }
-    
-    async def deploy_to_production(
-        self,
-        pr_number: int
-    ) -> Dict[str, Any]:
-        """Deploy changes to production"""
-        try:
-            # Get pull request
-            pr = self.repo.get_pull(pr_number)
-            
-            # Check if PR is approved and tests pass
-            if not pr.mergeable:
+            # Ensure we're on the sitesentry branch
+            result = self.github.ensure_sitesentry_branch()
+            if result["status"] != "success":
                 return {
                     "status": "error",
-                    "error": "Pull request is not mergeable"
+                    "error": f"Failed to switch to sitesentry branch: {result['message']}"
                 }
             
-            # Merge pull request
-            merge_result = pr.merge()
+            branch_name = result.get("branch_name", self.github.SITESENTRY_BRANCH)
+            self.logger.info("Working on branch", branch=branch_name)
             
-            if merge_result.merged:
-                # Trigger production deployment workflow
-                workflow = self.repo.get_workflow("deploy.yml")
-                run = workflow.create_dispatch(
-                    self.main_branch,
-                    inputs={"environment": "production"}
-                )
-                
-                # Wait for deployment completion
-                while True:
-                    run = self.repo.get_workflow_run(run.id)
-                    if run.status == "completed":
-                        break
-                    await asyncio.sleep(10)
-                
+            # Commit changes if there are any
+            if not self.github.commit_changes(f"Update from SiteSentry on {branch_name}"):
                 return {
-                    "status": "success",
-                    "details": {
-                        "run_id": run.id,
-                        "conclusion": run.conclusion,
-                        "url": run.html_url
-                    }
+                    "status": "error",
+                    "error": "Failed to commit changes"
+                }
+            
+            # Push changes to remote
+            if not self.github.push_changes():
+                return {
+                    "status": "error",
+                    "error": "Failed to push changes"
                 }
             
             return {
-                "status": "error",
-                "error": "Failed to merge pull request"
+                "status": "success",
+                "message": f"Changes pushed to {branch_name}",
+                "branch": branch_name
             }
             
         except Exception as e:
-            self.logger.error("deployment_error", error=str(e))
+            self.logger.error("Error processing deployment task", error=str(e))
             return {
                 "status": "error",
                 "error": str(e)
             }
-    
-    async def process(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Process deployment request"""
-        action = data.get("action")
-        if not action:
-            raise ValueError("Action is required")
-        
-        try:
-            if action == "create_test_branch":
-                result = await self.create_test_branch(data.get("changes", {}))
-            
-            elif action == "run_tests":
-                result = await self.run_tests(data["branch_name"])
-            
-            elif action == "create_pr":
-                result = await self.create_pull_request(
-                    data["branch_name"],
-                    data.get("changes", {})
-                )
-            
-            elif action == "deploy":
-                result = await self.deploy_to_production(data["pr_number"])
-            
-            else:
-                raise ValueError(f"Unknown action: {action}")
-            
-            # Store deployment action in memory
-            await self.memory_manager.add_document({
-                "action": action,
-                "data": data,
-                "result": result,
-                "timestamp": datetime.now().isoformat()
-            })
-            
-            return result
-            
-        except Exception as e:
-            self.logger.error("processing_error", error=str(e))
-            return {
-                "status": "error",
-                "error": str(e)
-            }
-    
+
     async def cleanup(self) -> None:
-        """Cleanup resources"""
-        await super().cleanup() 
+        """Clean up resources."""
+        try:
+            # Stop any running servers
+            if hasattr(self, 'old_server') and self.old_server:
+                try:
+                    self.old_server.terminate()
+                    self.old_server = None
+                    self.logger.info("Old server terminated")
+                except Exception as e:
+                    self.logger.error("Failed to terminate old server", error=str(e))
+            
+            if hasattr(self, 'new_server') and self.new_server:
+                try:
+                    self.new_server.terminate()
+                    self.new_server = None
+                    self.logger.info("New server terminated")
+                except Exception as e:
+                    self.logger.error("Failed to terminate new server", error=str(e))
+            
+            # Clean up temporary files
+            if hasattr(self, 'temp_dir') and self.temp_dir:
+                try:
+                    import shutil
+                    shutil.rmtree(self.temp_dir, ignore_errors=True)
+                    self.logger.info("Temporary directory cleaned up")
+                except Exception as e:
+                    self.logger.error("Failed to clean up temporary directory", error=str(e))
+            
+            await super().cleanup()
+            self.logger.info("CICD deployment agent cleaned up")
+            
+        except Exception as e:
+            self.logger.error("Error during CICD deployment cleanup", error=str(e)) 
